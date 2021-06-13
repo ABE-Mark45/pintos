@@ -70,6 +70,9 @@ sema_down (struct semaphore *sema)
     {
 
       list_push_back (&sema->waiters, &thread_current ()->elem);
+      // TODO: add lock to
+      struct thread *cur = thread_current();
+      list_insert_ordered(cur->acquired_locks, ) 
       thread_block ();
     }
   sema->value--;

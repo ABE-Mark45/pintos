@@ -29,6 +29,7 @@ static struct list ready_list;
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
+static struct list blocked_threads;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -99,10 +100,10 @@ thread_init (void)
   // MY CODE
   load_avg = 0;
   // --------------------
-  
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init(&blocked_threads);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -388,21 +389,24 @@ struct list thread_get_acquired_locks(const struct thread* a){
   return a->acquired_locks;
 }
 //to be called in acquire lock (inside sema down)
-void thread_add_to_accquired_locks(struct thread*a,struct lock* l){
-  list_insert_ordered(&a->acquired_locks,l,acquired_lock_sort_by_priority,NULL);//add new acquired lock in the list of the thread
+void thread_add_to_accquired_locks(struct lock* l){
+  struct thread *cur = thread_current();
+  list_insert_ordered(&cur->acquired_locks,l,acquired_lock_sort_by_priority,NULL);//add new acquired lock in the list of the thread
   //call upfdate donation
 }
 //to be called in release lock
-void thread_remove_from_accquired_locks(struct thread*a,struct lock* l){
-  struct list_elem *elem;
-  elem=list_begin(&a->acquired_locks);//get the begin of the list
-  while ((elem= list_next (elem)) != list_end (&a->acquired_locks)){//iterate to find the element
-    if (list_entry(elem,struct lock,lock_elem)==l)  //compare
-      {
-        list_remove (elem);//remove from acquired list
-      }
-   }
+void thread_remove_from_accquired_locks(struct lock* l){
+  struct thread *cur = thread_current();
+  ASSERT(!list_empty(&cur->acquired_locks));
+  list_remove(&l->lock_elem);
+
    //call update donation fn 
+  if(list_empty(&cur->acquired_locks))
+    cur->donated_priority = cur->priority;
+  else
+  {
+    cur->donated_priority = list_entry(list_begin(&cur->acquired_locks), struct lock, lock_elem)->highest_donated_priority;
+  }
 }
 /*modified thread is the thread which have one of it's locks case 1 added or case 2  removed so we update the donations for both it's acquired lock 
                     case 2 remove lock:             modified thread
@@ -575,12 +579,15 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
+
   t->priority = priority;
+  t->donated_priority = priority;
+
+
   t->magic = THREAD_MAGIC;
   t->nice_value = 0;            // TODO: Calculate priority at initialization
   t->recent_cpu = 0;
   //start our code
-  t->donated_priority = priority;
   list_init(&t->acquired_locks);
   //end our code
   old_level = intr_disable ();
@@ -705,23 +712,63 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 //start our code 
 //return true if awake up less than b wake up
-bool thread_sort_by_wakeup_time_comp(const struct thread* a, const struct thread* b, void *aux UNUSED)
+bool thread_sort_by_wakeup_time_comp(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
 {
-  ASSERT(a != NULL && b != NULL);
+  ASSERT(a_elem != NULL && b_elem != NULL);
+  struct thread *a = list_entry(a_elem, struct thread, elem);
+  struct thread *b = list_entry(b_elem, struct thread, elem);
   return a->wake_up_after_tick < b->wake_up_after_tick;
 }
 //  return true if a _priority > b_priority 
-bool thread_sort_by_priority(const struct thread* a, const struct thread* b, void *aux UNUSED)
+bool thread_sort_by_priority(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
 {
-  ASSERT(a != NULL && b != NULL);
+  ASSERT(a_elem != NULL && b_elem != NULL);
+  struct thread *a = list_entry(a_elem, struct thread, elem);
+  struct thread *b = list_entry(b_elem, struct thread, elem);
   return a->priority > b->priority;
 }
 //return true if lock a highest priority is less than lock b highest priority as defined in list less fn
-bool acquired_lock_sort_by_priority(const struct lock* a, const struct lock* b, void *aux UNUSED)
+bool acquired_lock_sort_by_priority(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
 {
-  ASSERT(a != NULL && b != NULL);
-  return a->highest_donated_priority < b->highest_donated_priority;
+  ASSERT(a_elem != NULL && b_elem != NULL);
+  struct lock *a = list_entry(a_elem, struct lock, lock_elem);
+  struct lock *b = list_entry(b_elem, struct lock, lock_elem);
+  return a->highest_donated_priority > b->highest_donated_priority;
 }
+
+void threads_wakeup_blocked(int64_t ticks)
+{
+  struct thread *it;
+  short max_priority = PRI_MIN;
+  while(!list_empty(&blocked_threads)
+  && (it = list_begin(&blocked_threads))
+  && it->wake_up_after_tick > ticks)
+  {
+    struct thread * t = list_entry(list_pop_front(&blocked_threads), struct thread, elem);
+    thread_unblock(t);
+
+    // TODO: unblock if priority of the unblocked thread is greater than the running thread
+    max_priority = MAX(max_priority, t->priority);
+  }
+
+  if(max_priority > thread_current()->priority)
+    intr_yield_on_return();
+}
+
+void thread_sleep(int64_t after)
+{
+  enum intr_level old_level = intr_disable ();
+  struct thread *t = thread_current();
+  t->wake_up_after_tick = after;
+
+  list_insert_ordered(&blocked_threads, &t->elem, thread_sort_by_wakeup_time_comp, NULL);
+
+  thread_block();
+  intr_set_level (old_level);
+
+}
+
+
 //<------------------------------------------some comments for requirments and visualization------------------------------------------------------------->
 /*  
                     1.priority scheduling TODO(check if we need an if statment in timer interrupt to see in which mode we run (priority or advanced))
@@ -740,8 +787,8 @@ bool acquired_lock_sort_by_priority(const struct lock* a, const struct lock* b, 
 
 visualization:
 
-(T1 ,p=100)-------waits for------>(T2,p=40)-------waits for ------>(t3,p=30)(running thread)
-                                   D.P=100                            D.P=100
+(T1 ,p=100)-------waits for------>(T2,p=100)-------waits for ------>(t3,p=5)(running thread) 2 locks  ,100 
+                                                                    D.P=[60]
                                                                  *
                                               (100>60)          /
                                                             waits for t3              (so what happen that D.p is  updated and take the higher P so t3 finish and then     

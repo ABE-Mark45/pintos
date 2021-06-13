@@ -26,7 +26,6 @@ static int64_t ticks;
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
-static struct list blocked_threads;
 
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
@@ -39,7 +38,6 @@ static void real_time_delay (int64_t num, int32_t denom);
 void
 timer_init (void) 
 {
-  list_init(&blocked_threads);
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
@@ -94,22 +92,13 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
 
   // while (timer_elapsed (start) < ticks) 
   //   thread_yield ();
 
-
-  struct thread *t = thread_current();
-  t->wake_up_after_tick = start + ticks;
-
-  list_insert_ordered(&blocked_threads, &t->elem, thread_sort_by_wakeup_time_comp, NULL);
-
-  enum intr_level old_level = intr_disable ();
-  thread_block();
-  intr_set_level (old_level);
+  thread_sleep(timer_ticks () + ticks);
 
 }
 
@@ -188,34 +177,21 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  threads_update_statistics(ticks % TIMER_FREQ == 0);
 
-  if(ticks % 4 == 0)
+  if(thread_mlfqs == BSD_SCHEDULER)
   {
-    struct thread *t = thread_current();
-    short new_priority = PRI_MAX - F_TO_I_DOWN(DIV_F_I(t->recent_cpu, 4)) - t->nice_value * 2;
-    thread_set_priority(new_priority);
 
+    threads_update_statistics(ticks % TIMER_FREQ == 0);
 
+    if(ticks % 4 == 0)
+    {
+      struct thread *t = thread_current();
+      short new_priority = PRI_MAX - F_TO_I_DOWN(DIV_F_I(t->recent_cpu, 4)) - t->nice_value * 2;
+      thread_set_priority(new_priority);
+    }
 
+    
   }
-
-  struct thread *it;
-
-  short max_priority = PRI_MIN;
-  while(!list_empty(&blocked_threads)
-  && (it = list_begin(&blocked_threads))
-  && it->wake_up_after_tick > ticks)
-  {
-    struct thread * t = list_entry(list_pop_front(&blocked_threads), struct thread, elem);
-    thread_unblock(t);
-
-    // TODO: unblock if priority of the unblocked thread is greater than the running thread
-    max_priority = MAX(max_priority, t->priority);
-  }
-
-  if(max_priority > thread_current()->priority)
-    intr_yield_on_return();
   thread_tick ();
 }
 

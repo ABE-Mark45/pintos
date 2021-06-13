@@ -21,7 +21,7 @@ void sema_self_test (void);
 struct lock 
   {
     //start our code
-     struct list_elem lock_elem;               /* List element for locks used in list_entry  */ 
+    struct list_elem lock_elem;               /* List element for locks used in list_entry  */ 
     int highest_donated_priority;
     //end our code
     struct thread *holder;      /* Thread holding lock (for debugging). */

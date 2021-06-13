@@ -150,11 +150,12 @@ int thread_get_load_avg (void);
 
 //start  Our Code
 void threads_update_statistics(bool);
-bool thread_sort_by_wakeup_time_comp(const struct thread* a, const struct thread* b, void *aux UNUSED);
+bool thread_sort_by_wakeup_time_comp(const struct list_elem* a, const struct list_elem* b, void *aux UNUSED);
 int thread_get_donated_priority(const struct thread*); 
 void thread_set_donated_priority(struct thread* ,int); 
 struct list thread_get_acquired_locks(const struct thread*);
-void thread_add_to_accquired_locks(struct thread*,struct lock*);
-void thread_remove_from_accquired_locks(struct thread*,struct lock*);
+void thread_add_to_accquired_locks(struct lock*);
+void thread_remove_from_accquired_locks(struct lock*);
+void thread_sleep(int64_t);
 //end our code
 #endif /* threads/thread.h */
