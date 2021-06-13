@@ -264,7 +264,11 @@ lock_release (struct lock *lock) //our code: call the function resposible to upd
   ASSERT (lock_held_by_current_thread (lock));
   lock->highest_donated_priority = 0;
   lock->holder = NULL;
+  if(thread_mlfqs == PRIORITY_SCHEDULER){
+    thread_remove_from_accquired_locks(lock);
+  }
   sema_up (&lock->semaphore);
+
 }
 //start our code
  int lock_get_donated_priority(struct lock *lock){

@@ -287,6 +287,13 @@ thread_unblock (struct thread *t)
   //list_push_back (&ready_list, &t->elem);
   list_insert_ordered (&ready_list, &t->elem, threads_sort_by_priority, NULL);
   t->status = THREAD_READY;
+//start our code 
+struct thread *to_be_scheduled = list_entry(list_begin(&ready_list), struct thread, elem);
+  if(thread_mlfqs == PRIORITY_SCHEDULER && to_be_scheduled->donated_priority > thread_current()->donated_priority )
+    intr_yield_on_return();
+  else if(thread_mlfqs != PRIORITY_SCHEDULER && to_be_scheduled->priority > thread_current()->priority )
+    intr_yield_on_return();
+  //end our code 
   intr_set_level (old_level);
 }
 
