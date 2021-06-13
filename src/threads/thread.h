@@ -153,10 +153,11 @@ int thread_get_load_avg (void);
 
 
 //start  Our Code
-
+void threads_wakeup_blocked(int64_t ticks);
 void threads_update_statistics(bool);
-bool thread_sort_by_wakeup_time_comp(const struct list_elem* a, const struct list_elem* b, void *aux UNUSED);
-bool threads_sort_by_priority(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED);
+bool threads_sort_by_wakeup_time_comp(const struct list_elem *, const struct list_elem *, void * UNUSED);
+bool acquired_lock_sort_by_priority(const struct list_elem *, const struct list_elem *, void * UNUSED);
+bool threads_sort_by_priority(const struct list_elem *, const struct list_elem *, void * UNUSED);
 int thread_get_donated_priority(const struct thread*); 
 void thread_set_donated_priority(struct thread* ,int); 
 struct list thread_get_acquired_locks(const struct thread*);

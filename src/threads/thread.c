@@ -143,13 +143,15 @@ void threads_update_statistics(bool one_second)
     a = DIV_F_I(a, 60);
     
     uint32_t b = I_TO_F(list_size(&ready_list));
-    DIV_F_I(b, 60);
+    b = DIV_F_I(b, 60);
 
     load_avg = ADD_F_F(a, b);
     
-    struct thread * cur = list_head(&all_list);
-    while((cur = list_next(&all_list)) != list_tail(&all_list))
+    struct list_elem * cur_iter = list_head(&all_list);
+    struct thread *cur;
+    while((cur_iter = list_next(cur_iter)) != list_tail(&all_list))
     {
+      cur = list_entry(cur_iter, struct thread, elem);
       uint32_t recent_cpu = cur->recent_cpu;
       uint32_t load_avg_double = MUL_F_I(load_avg,2);
       cur->recent_cpu = ADD_F_I(MUL_F_F(DIV_F_F(load_avg_double, ADD_F_I(load_avg_double, 1)), recent_cpu), cur->nice_value);
@@ -287,13 +289,7 @@ thread_unblock (struct thread *t)
   //list_push_back (&ready_list, &t->elem);
   list_insert_ordered (&ready_list, &t->elem, threads_sort_by_priority, NULL);
   t->status = THREAD_READY;
-//start our code 
-struct thread *to_be_scheduled = list_entry(list_begin(&ready_list), struct thread, elem);
-  if(thread_mlfqs == PRIORITY_SCHEDULER && to_be_scheduled->donated_priority > thread_current()->donated_priority )
-    intr_yield_on_return();
-  else if(thread_mlfqs != PRIORITY_SCHEDULER && to_be_scheduled->priority > thread_current()->priority )
-    intr_yield_on_return();
-  //end our code 
+//start our code  
   intr_set_level (old_level);
 }
 
@@ -362,8 +358,8 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem); // TODO: check insert with prority ordered
+  if (cur != idle_thread)
+    list_insert_ordered(&ready_list, &cur->elem, threads_sort_by_priority, NULL); // TODO: check insert with prority ordered
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -398,7 +394,7 @@ struct list thread_get_acquired_locks(const struct thread* a){
 //to be called in acquire lock (inside sema down)
 void thread_add_to_accquired_locks(struct lock* l){
   struct thread *cur = thread_current();
-  list_insert_ordered(&cur->acquired_locks,l,acquired_lock_sort_by_priority,NULL);//add new acquired lock in the list of the thread
+  list_insert_ordered(&cur->acquired_locks, &l->lock_elem, acquired_lock_sort_by_priority,NULL);//add new acquired lock in the list of the thread
   cur->donated_priority = MAX(cur->donated_priority, l->highest_donated_priority);
 
   // TODO: Thread switch
@@ -725,7 +721,7 @@ bool threads_sort_by_wakeup_time_comp(const struct list_elem *a_elem, const stru
   struct thread *a = list_entry(a_elem, struct thread, elem);
   struct thread *b = list_entry(b_elem, struct thread, elem);
   if(a->wake_up_after_tick == b->wake_up_after_tick)
-    return thread_sort_by_priority(a_elem, b_elem, NULL);
+    return threads_sort_by_priority(a_elem, b_elem, NULL);
   return a->wake_up_after_tick < b->wake_up_after_tick;
 }
 //  return true if a _priority > b_priority 
@@ -748,18 +744,17 @@ bool acquired_lock_sort_by_priority(const struct list_elem *a_elem, const struct
   return a->highest_donated_priority > b->highest_donated_priority;
 }
 
+
 void threads_wakeup_blocked(int64_t ticks)
 {
   struct thread *it;
   short max_priority = PRI_MIN;
   while(!list_empty(&blocked_threads)
-  && (it = list_begin(&blocked_threads))
+  && (it = list_entry(list_begin(&blocked_threads), struct thread, elem) )
   && it->wake_up_after_tick > ticks)
   {
     struct thread * t = list_entry(list_pop_front(&blocked_threads), struct thread, elem);
     thread_unblock(t);
-
-    // TODO: unblock if priority of the unblocked thread is greater than the running thread
     max_priority = MAX(max_priority, t->priority);
   }
 
@@ -775,7 +770,7 @@ void thread_sleep(int64_t after)
   struct thread *t = thread_current();
   t->wake_up_after_tick = after;
 
-  list_insert_ordered(&blocked_threads, &t->elem, thread_sort_by_wakeup_time_comp, NULL);
+  list_insert_ordered(&blocked_threads, &t->elem, threads_sort_by_wakeup_time_comp, NULL);
 
   thread_block();
   intr_set_level (old_level);

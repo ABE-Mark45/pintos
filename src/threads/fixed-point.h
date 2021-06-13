@@ -4,7 +4,7 @@
 
 #define P 17
 #define Q 14
-#define F 1<<Q
+#define F (1<<Q)
 
 #define I_TO_F(N) N*F               // Integer to fixed point
 #define F_TO_I_DOWN(X) X/F          // Fixed point to integer

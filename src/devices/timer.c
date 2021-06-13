@@ -177,7 +177,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
 
-  if(thread_mlfqs == PRIORITY_SCHEDULER)
+  if(thread_mlfqs != PRIORITY_SCHEDULER)
   {
 
     threads_update_statistics(ticks % TIMER_FREQ == 0);
@@ -191,6 +191,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 
     
   }
+  threads_wakeup_blocked(ticks);
   thread_tick ();
 }
 

@@ -28,7 +28,6 @@ struct lock
     struct semaphore semaphore; /* Binary semaphore controlling access. */
   };
 //start our code
-void update_donation_vals();
 int lock_get_donated_priority(struct lock *);
 void lock_set_donated_priority(struct lock *,int);
  //end our code
