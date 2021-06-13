@@ -285,7 +285,7 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   //list_push_back (&ready_list, &t->elem);
-  list_insert_ordered (&ready_list, &t->elem, thread_sort_by_priority, NULL);
+  list_insert_ordered (&ready_list, &t->elem, threads_sort_by_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -392,6 +392,7 @@ struct list thread_get_acquired_locks(const struct thread* a){
 void thread_add_to_accquired_locks(struct lock* l){
   struct thread *cur = thread_current();
   list_insert_ordered(&cur->acquired_locks,l,acquired_lock_sort_by_priority,NULL);//add new acquired lock in the list of the thread
+  
   //call upfdate donation
 }
 //to be called in release lock
@@ -712,20 +713,25 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 //start our code 
 //return true if awake up less than b wake up
-bool thread_sort_by_wakeup_time_comp(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
+bool threads_sort_by_wakeup_time_comp(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
 {
   ASSERT(a_elem != NULL && b_elem != NULL);
   struct thread *a = list_entry(a_elem, struct thread, elem);
   struct thread *b = list_entry(b_elem, struct thread, elem);
+  if(a->wake_up_after_tick == b->wake_up_after_tick)
+    return thread_sort_by_priority(a_elem, b_elem, NULL);
   return a->wake_up_after_tick < b->wake_up_after_tick;
 }
 //  return true if a _priority > b_priority 
-bool thread_sort_by_priority(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
+bool threads_sort_by_priority(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
 {
   ASSERT(a_elem != NULL && b_elem != NULL);
   struct thread *a = list_entry(a_elem, struct thread, elem);
   struct thread *b = list_entry(b_elem, struct thread, elem);
-  return a->priority > b->priority;
+  if(thread_mlfqs == BSD_SCHEDULER)
+    return a->priority > b->priority;
+  else
+    return a->donated_priority > b->donated_priority;
 }
 //return true if lock a highest priority is less than lock b highest priority as defined in list less fn
 bool acquired_lock_sort_by_priority(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
@@ -755,6 +761,8 @@ void threads_wakeup_blocked(int64_t ticks)
     intr_yield_on_return();
 }
 
+
+// ana hrai7ly habetin
 void thread_sleep(int64_t after)
 {
   enum intr_level old_level = intr_disable ();
