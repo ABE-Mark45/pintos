@@ -237,6 +237,11 @@ thread_create (const char *name, int priority,
   sf->ebp = 0;
 
   /* Add to run queue. */
+
+  // our code
+  t->nice_value = thread_current()->nice_value;
+  // ----------
+
   thread_unblock (t);
 
   return tid;
@@ -347,7 +352,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_push_back (&ready_list, &cur->elem); // TODO: check insert with prority ordered
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -375,6 +380,9 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  if(!list_empty(&ready_list) && 
+  list_entry(list_begin(&ready_list), struct thread, elem)->priority > new_priority)
+    thread_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -394,6 +402,12 @@ thread_set_nice (int nice UNUSED)
   thread_current() ->priority = PRI_MAX - (thread_current()->recent_cpu / 4) - (nice * 2);
 
   // TODO: Thread yield stuff 
+
+  if(!list_empty(&ready_list) && 
+  list_entry(list_begin(&ready_list), struct thread, elem)->priority > thread_current()->priority)
+    thread_yield();
+
+
 }
 
 /* Returns the current thread's nice value. */
