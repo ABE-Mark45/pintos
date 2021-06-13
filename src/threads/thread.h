@@ -4,6 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#define MAX(a,b) (a > b) ? a: b;
+
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -23,7 +25,7 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
-#define BSD_SCHEDULER true
+#define PRIORITY_SCHEDULER false
 
 /* A kernel thread or user process.
 
@@ -98,6 +100,7 @@ struct thread
     uint32_t wake_up_after_tick;
     int donated_priority;
     struct list acquired_locks;           /* List  for all acquired locks.(initiated in init_thread) */
+    struct lock* waiting_on_lock;
    
     //finish our code
     /* Shared between thread.c and synch.c. */
@@ -150,6 +153,7 @@ int thread_get_load_avg (void);
 
 
 //start  Our Code
+
 void threads_update_statistics(bool);
 bool thread_sort_by_wakeup_time_comp(const struct list_elem* a, const struct list_elem* b, void *aux UNUSED);
 bool threads_sort_by_priority(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED);

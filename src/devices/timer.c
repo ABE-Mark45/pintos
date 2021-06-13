@@ -9,7 +9,6 @@
 #include "threads/thread.h"
 #include "threads/fixed-point.h"
 #include <list.h>
-#define MAX(a,b) (a > b) ? a: b;
 
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -178,7 +177,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
 
-  if(thread_mlfqs == BSD_SCHEDULER)
+  if(thread_mlfqs == PRIORITY_SCHEDULER)
   {
 
     threads_update_statistics(ticks % TIMER_FREQ == 0);

@@ -392,8 +392,11 @@ struct list thread_get_acquired_locks(const struct thread* a){
 void thread_add_to_accquired_locks(struct lock* l){
   struct thread *cur = thread_current();
   list_insert_ordered(&cur->acquired_locks,l,acquired_lock_sort_by_priority,NULL);//add new acquired lock in the list of the thread
-  
+  cur->donated_priority = MAX(cur->donated_priority, l->highest_donated_priority);
+
+  // TODO: Thread switch
   //call upfdate donation
+
 }
 //to be called in release lock
 void thread_remove_from_accquired_locks(struct lock* l){
@@ -430,11 +433,6 @@ void thread_remove_from_accquired_locks(struct lock* l){
 
 
 */
-void update_donations(struct thread*modifed_thread){
-//first check how semaphores handles the waiting list adding and removing
-//implement the above algorithm
-
-}
 //end our code
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -590,6 +588,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->recent_cpu = 0;
   //start our code
   list_init(&t->acquired_locks);
+  t->waiting_on_lock = NULL;
   //end our code
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -728,7 +727,7 @@ bool threads_sort_by_priority(const struct list_elem *a_elem, const struct list_
   ASSERT(a_elem != NULL && b_elem != NULL);
   struct thread *a = list_entry(a_elem, struct thread, elem);
   struct thread *b = list_entry(b_elem, struct thread, elem);
-  if(thread_mlfqs == BSD_SCHEDULER)
+  if(thread_mlfqs == PRIORITY_SCHEDULER)
     return a->priority > b->priority;
   else
     return a->donated_priority > b->donated_priority;
