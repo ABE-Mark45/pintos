@@ -57,6 +57,9 @@ static uint32_t load_avg;
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
+//start our code
+#define DONATION_DEPTH 8;
+//end our code
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -96,7 +99,7 @@ thread_init (void)
   // MY CODE
   load_avg = 0;
   // --------------------
-
+  
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
@@ -374,6 +377,60 @@ thread_foreach (thread_action_func *func, void *aux)
       func (t, aux);
     }
 }
+//start our code
+int thread_get_donated_priority(const struct thread* a){
+  return a->donated_priority;
+} 
+void thread_set_donated_priority(struct thread* a,int new_donated){
+  a->donated_priority=new_donated;
+} 
+struct list thread_get_acquired_locks(const struct thread* a){
+  return a->acquired_locks;
+}
+//to be called in acquire lock (inside sema down)
+void thread_add_to_accquired_locks(struct thread*a,struct lock* l){
+  list_insert_ordered(&a->acquired_locks,l,acquired_lock_sort_by_priority,NULL);//add new acquired lock in the list of the thread
+  //call upfdate donation
+}
+//to be called in release lock
+void thread_remove_from_accquired_locks(struct thread*a,struct lock* l){
+  struct list_elem *elem;
+  elem=list_begin(&a->acquired_locks);//get the begin of the list
+  while ((elem= list_next (elem)) != list_end (&a->acquired_locks)){//iterate to find the element
+    if (list_entry(elem,struct lock,lock_elem)==l)  //compare
+      {
+        list_remove (elem);//remove from acquired list
+      }
+   }
+   //call update donation fn 
+}
+/*modified thread is the thread which have one of it's locks case 1 added or case 2  removed so we update the donations for both it's acquired lock 
+                    case 2 remove lock:             modified thread
+                                                   /         |      \
+  current acquired locks :                     A           B         C       so we see which has the highest priority and give it  to modified ,
+   in the removed lock itself                  removed lock
+                                               /    |     \
+                                              t1    t2    t3 
+                       let's assume that we had a running thread which had a ccertain sight through the waiting priorities according to DONATION_DEPTH so we itterate 
+                       in the new waiting list untill we reach the depth and test threads priorities aganist the lock highest priority  and update if it is higher
+
+        case 1: add thread to lock as waiting       lock A 
+                                                  /    |     \                                   
+                                                t1     t2    new added thread(modified thread) 
+                                            holds it  waits         waits for the lock after t2
+                            so in this case we check the new added thread (modidied thread) to see if it has a higher priority of the highest priority of the lock 
+                            if it's smaller so do nothing 
+                            else if (it's higher than &&it's depth in the waiting <= DONATION_DEPTH) then update the highest priority variable which exist in the lock A
+                             and for each thread in the waiting list update it's donated priority with the lock's priority
+
+
+*/
+void update_donations(struct thread*modifed_thread){
+//first check how semaphores handles the waiting list adding and removing
+//implement the above algorithm
+
+}
+//end our code
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
@@ -522,7 +579,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   t->nice_value = 0;            // TODO: Calculate priority at initialization
   t->recent_cpu = 0;
-
+  //start our code
+  t->donated_priority = priority;
+  list_init(&t->acquired_locks);
+  //end our code
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
@@ -641,15 +701,74 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+
+//start our code 
 //return true if awake up less than b wake up
 bool thread_sort_by_wakeup_time_comp(const struct thread* a, const struct thread* b, void *aux UNUSED)
 {
   ASSERT(a != NULL && b != NULL);
   return a->wake_up_after_tick < b->wake_up_after_tick;
 }
-//  return true if a _priority > b_priority
+//  return true if a _priority > b_priority 
 bool thread_sort_by_priority(const struct thread* a, const struct thread* b, void *aux UNUSED)
 {
   ASSERT(a != NULL && b != NULL);
   return a->priority > b->priority;
 }
+//return true if lock a highest priority is less than lock b highest priority as defined in list less fn
+bool acquired_lock_sort_by_priority(const struct lock* a, const struct lock* b, void *aux UNUSED)
+{
+  ASSERT(a != NULL && b != NULL);
+  return a->highest_donated_priority < b->highest_donated_priority;
+}
+//<------------------------------------------some comments for requirments and visualization------------------------------------------------------------->
+/*  
+                    1.priority scheduling TODO(check if we need an if statment in timer interrupt to see in which mode we run (priority or advanced))
+                    check for max priority in ready queue and if there exist a priority such that >current_thread (donated) priority  --> TODO(need to add donated
+                    priority var in thread ) , we call thread_yield()for current
+
+                    2.priority Donation  where to apply :in priority scheduler (when mflq==false) and around locks
+                                                                 /                                              \
+                                                                /                                                \
+                                                               /                                                  \
+                                                                                                          when we have a thread with low priority 
+                                                      in priority scheduling                            holding a mutex lock  which there is a higher 
+                                                      we check aganist donated                          priority waits (blocked)for that same lock with a defined 
+                                                                                                        depth=8 (as documintaion) so that higher priority 
+                                                                                                donates it's priority for the running one which hold the mutex
+
+visualization:
+
+(T1 ,p=100)-------waits for------>(T2,p=40)-------waits for ------>(t3,p=30)(running thread)
+                                   D.P=100                            D.P=100
+                                                                 *
+                                              (100>60)          /
+                                                            waits for t3              (so what happen that D.p is  updated and take the higher P so t3 finish and then     
+                                                            /                           t2,t1,t4. assuming that the highest proirities are 60,100)                         
+                                                    (t4,p=60)
+
+implementation approach: donate the highest priority of the waiting list on a lock to the lock itself (lock priority) and whatever thread acquire the lock it's D.P will be assigned 
+                        to that prioty, once it release the lock we call a fn to updates it's D.P : the fn for the given 
+                        
+                        case 1:thread handling 
+                         it sees what are the locks which are acquired by the thread
+                        and compare thier highest priority and assign the D.P to the highest , if there is no acquired locks the D.P set back to it's original priority
+                        
+                        for case 2 Lock handling : 
+                        if it is (2.1) accquire check  if the acquring thread priority is higher than highest priority var of the lock , if true update the highest 
+                        lock var ,if false update the D.P with the highest lock , 
+                        
+                        (2.2)if relese lock then check for the current highest in the waiting list and update the highest in the lock if(waiting empty) the highest set to zero 
+
+                        this is called when a thread acquire a lock or release it ,,the fn takes three paramater 1.thread pointer 2. the lock 3. the state (acquire or release)
+
+                        TODO: implement the fn ,and add a list with acquired locks to  thread struct ,modify lock struct and add a new var highest priority 
+
+need to know :where to call add_acquire locks and remove_acquired locks, what is the initial val of donated priority, 2. check list_insert_order sorting criteria : sort by priority now is > shouldn't be (<)? as 
+
+typedef bool list_less_func (const struct list_elem *a,
+                             const struct list_elem *b,
+                             void *aux);
+                             returns true if a <b
+*/

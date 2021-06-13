@@ -68,6 +68,7 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
+
       list_push_back (&sema->waiters, &thread_current ()->elem);
       thread_block ();
     }
@@ -106,7 +107,7 @@ sema_try_down (struct semaphore *sema)
 
    This function may be called from an interrupt handler. */
 void
-sema_up (struct semaphore *sema) 
+sema_up (struct semaphore *sema)  //our code:TODO get the maximum priority and unlock it then call schedule
 {
   enum intr_level old_level;
 
@@ -178,6 +179,9 @@ lock_init (struct lock *lock)
   ASSERT (lock != NULL);
 
   lock->holder = NULL;
+  //start our code
+  lock->highest_donated_priority=0;
+  //end our code
   sema_init (&lock->semaphore, 1);
 }
 
@@ -190,7 +194,7 @@ lock_init (struct lock *lock)
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
 void
-lock_acquire (struct lock *lock)
+lock_acquire (struct lock *lock) //our code:call the fn responsible for updating donations 
 {
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
@@ -198,6 +202,7 @@ lock_acquire (struct lock *lock)
 
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
+  //edit thread_current()->acquired_locks
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -226,7 +231,7 @@ lock_try_acquire (struct lock *lock)
    make sense to try to release a lock within an interrupt
    handler. */
 void
-lock_release (struct lock *lock) 
+lock_release (struct lock *lock) //our code: call the function resposible to update donation
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
@@ -234,6 +239,14 @@ lock_release (struct lock *lock)
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 }
+//start our code
+ int lock_get_donated_priority(struct lock *lock){
+   return lock ->highest_donated_priority;
+ }
+void lock_set_donated_priority(struct lock *lock,int new_highest){
+  lock ->highest_donated_priority=new_highest;
+}
+//end our code
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds

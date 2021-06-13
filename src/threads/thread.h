@@ -88,12 +88,17 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+   
+   
     struct list_elem allelem;           /* List element for all threads list. */
-    
+    //start our code 
     short nice_value;
     uint32_t recent_cpu;
     uint32_t wake_up_after_tick;
     int donated_priority;
+    struct list acquired_locks;           /* List  for all acquired locks.(initiated in init_thread) */
+   
+    //finish our code
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -143,8 +148,13 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 
-// Our Code
+//start  Our Code
 void threads_update_statistics(bool);
 bool thread_sort_by_wakeup_time_comp(const struct thread* a, const struct thread* b, void *aux UNUSED);
-
+int thread_get_donated_priority(const struct thread*); 
+void thread_set_donated_priority(struct thread* ,int); 
+struct list thread_get_acquired_locks(const struct thread*);
+void thread_add_to_accquired_locks(struct thread*,struct lock*);
+void thread_remove_from_accquired_locks(struct thread*,struct lock*);
+//end our code
 #endif /* threads/thread.h */
