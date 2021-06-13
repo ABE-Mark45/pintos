@@ -25,6 +25,7 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+#define BSD_SCHEDULER true
 #define PRIORITY_SCHEDULER false
 
 /* A kernel thread or user process.
@@ -153,6 +154,8 @@ int thread_get_load_avg (void);
 
 
 //start  Our Code
+void is_time_sliced_ended(void);
+bool is_current_greatest_priority(void);
 void threads_wakeup_blocked(int64_t ticks);
 void threads_update_statistics(bool);
 bool threads_sort_by_wakeup_time_comp(const struct list_elem *, const struct list_elem *, void * UNUSED);

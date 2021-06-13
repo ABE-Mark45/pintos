@@ -1,1 +1,1 @@
-pintos -T 20 --gdb -- run alarm-single
+pintos -T 20 -- run alarm-single

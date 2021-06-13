@@ -448,11 +448,23 @@ thread_set_priority (int new_priority)
     thread_yield();
 }
 
+// WARNING: this only works on priority schedulers
+bool is_current_greatest_priority(void)
+{
+  if(!list_empty(&ready_list) && 
+  list_entry(list_begin(&ready_list), struct thread, elem)->priority > thread_current()->priority)
+    return false;
+  return true;
+}
+
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  if(thread_mlfqs == PRIORITY_SCHEDULER)
+    return thread_current()->donated_priority;
+  else
+    return thread_current()->priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -777,6 +789,12 @@ void thread_sleep(int64_t after)
 
 }
 
+
+void is_time_sliced_ended()
+{
+  if(thread_ticks == TIME_SLICE)
+    intr_yield_on_return();
+}
 
 //<------------------------------------------some comments for requirments and visualization------------------------------------------------------------->
 /*  
