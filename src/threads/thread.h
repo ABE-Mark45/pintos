@@ -91,6 +91,7 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
     short nice_value;
     uint32_t recent_cpu;
+    uint32_t wake_up_after_tick;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -140,6 +141,8 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 
+// Our Code
 void threads_update_statistics(bool);
+bool thread_sort_by_wakeup_time_comp(const struct thread* a, const struct thread* b, void *aux UNUSED);
 
 #endif /* threads/thread.h */
