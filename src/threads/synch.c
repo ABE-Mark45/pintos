@@ -68,6 +68,7 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
+
       list_push_back (&sema->waiters, &thread_current ()->elem);
       thread_block ();
     }
@@ -178,6 +179,9 @@ lock_init (struct lock *lock)
   ASSERT (lock != NULL);
 
   lock->holder = NULL;
+  //start our code
+  lock->highest_donated_priority=0;
+  //end our code
   sema_init (&lock->semaphore, 1);
 }
 
@@ -198,6 +202,7 @@ lock_acquire (struct lock *lock) //our code:call the fn responsible for updating
 
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
+  //edit thread_current()->acquired_locks
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -234,6 +239,14 @@ lock_release (struct lock *lock) //our code: call the function resposible to upd
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 }
+//start our code
+ int lock_get_donated_priority(struct lock *lock){
+   return lock ->highest_donated_priority;
+ }
+void lock_set_donated_priority(struct lock *lock,int new_highest){
+  lock ->highest_donated_priority=new_highest;
+}
+//end our code
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds

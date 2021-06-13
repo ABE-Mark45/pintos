@@ -96,7 +96,7 @@ thread_init (void)
   // MY CODE
   load_avg = 0;
   // --------------------
-
+  
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
@@ -374,6 +374,34 @@ thread_foreach (thread_action_func *func, void *aux)
       func (t, aux);
     }
 }
+//start our code
+int thread_get_donated_priority(const struct thread* a){
+  return a->donated_priority;
+} 
+void thread_set_donated_priority(struct thread* a,int new_donated){
+  a->donated_priority=new_donated;
+} 
+struct list thread_get_acquired_locks(const struct thread* a){
+  return a->acquired_locks;
+}
+//to be called in acquire lock (inside sema down)
+void thread_add_to_accquired_locks(struct thread*a,struct lock* l){
+  list_insert_ordered(&a->acquired_locks,l,acquired_lock_sort_by_priority,NULL);//add new acquired lock in the list of the thread
+  //call upfdate donation
+}
+//to be called in release lock
+void thread_remove_from_accquired_locks(struct thread*a,struct lock* l){
+  struct list_elem *elem;
+  elem=list_begin(&a->acquired_locks);//get the begin of the list
+  while ((elem= list_next (elem)) != list_end (&a->acquired_locks)){//iterate to find the element
+    if (list_entry(elem,struct lock,lock_elem)==l)  //compare
+      {
+        list_remove (elem);//remove from acquired list
+      }
+   }
+   //call update donation fn 
+}
+//end our code
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
@@ -522,7 +550,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   t->nice_value = 0;            // TODO: Calculate priority at initialization
   t->recent_cpu = 0;
-
+  //start our code
+  t->donated_priority = priority;
+  list_init(&t->acquired_locks);
+  //end our code
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
@@ -650,11 +681,17 @@ bool thread_sort_by_wakeup_time_comp(const struct thread* a, const struct thread
   ASSERT(a != NULL && b != NULL);
   return a->wake_up_after_tick < b->wake_up_after_tick;
 }
-//  return true if a _priority > b_priority
+//  return true if a _priority > b_priority 
 bool thread_sort_by_priority(const struct thread* a, const struct thread* b, void *aux UNUSED)
 {
   ASSERT(a != NULL && b != NULL);
   return a->priority > b->priority;
+}
+//return true if lock a highest priority is less than lock b highest priority as defined in list less fn
+bool acquired_lock_sort_by_priority(const struct lock* a, const struct lock* b, void *aux UNUSED)
+{
+  ASSERT(a != NULL && b != NULL);
+  return a->highest_donated_priority < b->highest_donated_priority;
 }
 //<------------------------------------------some comments for requirments and visualization------------------------------------------------------------->
 /*  
@@ -699,4 +736,10 @@ implementation approach: donate the highest priority of the waiting list on a lo
 
                         TODO: implement the fn ,and add a list with acquired locks to  thread struct ,modify lock struct and add a new var highest priority 
 
+need to know :where to call add_acquire locks and remove_acquired locks, what is the initial val of donated priority, 2. check list_insert_order sorting criteria : sort by priority now is > shouldn't be (<)? as 
+
+typedef bool list_less_func (const struct list_elem *a,
+                             const struct list_elem *b,
+                             void *aux);
+                             returns true if a <b
 */

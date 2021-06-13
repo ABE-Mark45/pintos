@@ -20,10 +20,18 @@ void sema_self_test (void);
 /* Lock. */
 struct lock 
   {
+    //start our code
+     struct list_elem lock_elem;               /* List element for locks used in list_entry  */ 
+    int highest_donated_priority;
+    //end our code
     struct thread *holder;      /* Thread holding lock (for debugging). */
     struct semaphore semaphore; /* Binary semaphore controlling access. */
   };
-
+//start our code
+void update_donation_vals();
+int lock_get_donated_priority(struct lock *);
+void lock_set_donated_priority(struct lock *,int);
+ //end our code
 void lock_init (struct lock *);
 void lock_acquire (struct lock *);
 bool lock_try_acquire (struct lock *);
