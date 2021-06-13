@@ -641,6 +641,9 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+
+//our code 
 //return true if awake up less than b wake up
 bool thread_sort_by_wakeup_time_comp(const struct thread* a, const struct thread* b, void *aux UNUSED)
 {
@@ -653,3 +656,47 @@ bool thread_sort_by_priority(const struct thread* a, const struct thread* b, voi
   ASSERT(a != NULL && b != NULL);
   return a->priority > b->priority;
 }
+//<------------------------------------------some comments for requirments and visualization------------------------------------------------------------->
+/*  
+                    1.priority scheduling TODO(check if we need an if statment in timer interrupt to see in which mode we run (priority or advanced))
+                    check for max priority in ready queue and if there exist a priority such that >current_thread (donated) priority  --> TODO(need to add donated
+                    priority var in thread ) , we call thread_yield()for current
+
+                    2.priority Donation  where to apply :in priority scheduler (when mflq==false) and around locks
+                                                                 /                                              \
+                                                                /                                                \
+                                                               /                                                  \
+                                                                                                          when we have a thread with low priority 
+                                                      in priority scheduling                            holding a mutex lock  which there is a higher 
+                                                      we check aganist donated                          priority waits (blocked)for that same lock with a defined 
+                                                                                                        depth=8 (as documintaion) so that higher priority 
+                                                                                                donates it's priority for the running one which hold the mutex
+
+visualization:
+
+(T1 ,p=100)-------waits for------>(T2,p=40)-------waits for ------>(t3,p=30)(running thread)
+                                   D.P=100                            D.P=100
+                                                                 *
+                                              (100>60)          /
+                                                            waits for t3              (so what happen that D.p is  updated and take the higher P so t3 finish and then     
+                                                            /                           t2,t1,t4. assuming that the highest proirities are 60,100)                         
+                                                    (t4,p=60)
+
+implementation approach: donate the highest priority of the waiting list on a lock to the lock itself (lock priority) and whatever thread acquire the lock it's D.P will be assigned 
+                        to that prioty, once it release the lock we call a fn to updates it's D.P : the fn for the given 
+                        
+                        case 1:thread handling 
+                         it sees what are the locks which are acquired by the thread
+                        and compare thier highest priority and assign the D.P to the highest , if there is no acquired locks the D.P set back to it's original priority
+                        
+                        for case 2 Lock handling : 
+                        if it is (2.1) accquire check  if the acquring thread priority is higher than highest priority var of the lock , if true update the highest 
+                        lock var ,if false update the D.P with the highest lock , 
+                        
+                        (2.2)if relese lock then check for the current highest in the waiting list and update the highest in the lock if(waiting empty) the highest set to zero 
+
+                        this is called when a thread acquire a lock or release it ,,the fn takes three paramater 1.thread pointer 2. the lock 3. the state (acquire or release)
+
+                        TODO: implement the fn ,and add a list with acquired locks to  thread struct ,modify lock struct and add a new var highest priority 
+
+*/

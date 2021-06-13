@@ -106,7 +106,7 @@ sema_try_down (struct semaphore *sema)
 
    This function may be called from an interrupt handler. */
 void
-sema_up (struct semaphore *sema) 
+sema_up (struct semaphore *sema)  //our code:TODO get the maximum priority and unlock it then call schedule
 {
   enum intr_level old_level;
 
@@ -190,7 +190,7 @@ lock_init (struct lock *lock)
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
 void
-lock_acquire (struct lock *lock)
+lock_acquire (struct lock *lock) //our code:call the fn responsible for updating donations 
 {
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
@@ -226,7 +226,7 @@ lock_try_acquire (struct lock *lock)
    make sense to try to release a lock within an interrupt
    handler. */
 void
-lock_release (struct lock *lock) 
+lock_release (struct lock *lock) //our code: call the function resposible to update donation
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
