@@ -57,6 +57,9 @@ static uint32_t load_avg;
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
+//start our code
+#define DONATION_DEPTH 8;
+//end our code
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -401,6 +404,32 @@ void thread_remove_from_accquired_locks(struct thread*a,struct lock* l){
    }
    //call update donation fn 
 }
+/*modified thread is the thread which have one of it's locks case 1 added or case 2  removed so we update the donations for both it's acquired lock 
+                    case 2 remove lock:             modified thread
+                                                   /         |      \
+  current acquired locks :                     A           B         C       so we see which has the highest priority and give it  to modified ,
+   in the removed lock itself                  removed lock
+                                               /    |     \
+                                              t1    t2    t3 
+                       let's assume that we had a running thread which had a ccertain sight through the waiting priorities according to DONATION_DEPTH so we itterate 
+                       in the new waiting list untill we reach the depth and test threads priorities aganist the lock highest priority  and update if it is higher
+
+        case 1: add thread to lock as waiting       lock A 
+                                                  /    |     \                                   
+                                                t1     t2    new added thread(modified thread) 
+                                            holds it  waits         waits for the lock after t2
+                            so in this case we check the new added thread (modidied thread) to see if it has a higher priority of the highest priority of the lock 
+                            if it's smaller so do nothing 
+                            else if (it's higher than &&it's depth in the waiting <= DONATION_DEPTH) then update the highest priority variable which exist in the lock A
+                             and for each thread in the waiting list update it's donated priority with the lock's priority
+
+
+*/
+void update_donations(struct thread*modifed_thread){
+//first check how semaphores handles the waiting list adding and removing
+//implement the above algorithm
+
+}
 //end our code
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -674,7 +703,7 @@ allocate_tid (void)
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 
-//our code 
+//start our code 
 //return true if awake up less than b wake up
 bool thread_sort_by_wakeup_time_comp(const struct thread* a, const struct thread* b, void *aux UNUSED)
 {
