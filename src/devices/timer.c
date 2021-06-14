@@ -176,10 +176,12 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+
   is_time_sliced_ended();
 
   if(thread_mlfqs == BSD_SCHEDULER)
   {
+
     threads_update_statistics(ticks % TIMER_FREQ == 0);
 
     if(ticks % 4 == 0)
@@ -189,6 +191,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
       thread_current()->priority = new_priority;
       if(is_current_greatest_priority())
         intr_yield_on_return();
+
     }
   }
   threads_wakeup_blocked(ticks);

@@ -768,7 +768,7 @@ void threads_wakeup_blocked(int64_t ticks)
     struct thread * t = list_entry(list_pop_front(&blocked_threads), struct thread, elem);
     thread_unblock(t);
     max_priority = MAX(max_priority, t->priority);
-    printf("[********] max_priority = %d\n", max_priority);
+    // printf("[********] max_priority = %d\n", max_priority);
   }
   // ASSERT(max_priority == 0);
 
