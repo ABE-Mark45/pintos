@@ -98,7 +98,7 @@ struct thread
     //start our code 
     short nice_value;
     uint32_t recent_cpu;
-    uint32_t wake_up_after_tick;
+    int64_t wake_up_after_tick;
     int donated_priority;
     struct list acquired_locks;           /* List  for all acquired locks.(initiated in init_thread) */
     struct lock* waiting_on_lock;

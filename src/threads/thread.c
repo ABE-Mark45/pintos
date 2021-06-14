@@ -763,7 +763,7 @@ void threads_wakeup_blocked(int64_t ticks)
   int max_priority = PRI_MIN;
   while(!list_empty(&blocked_threads)
   && (it = list_entry(list_begin(&blocked_threads), struct thread, elem) )
-  && it->wake_up_after_tick < ticks)
+  && it->wake_up_after_tick <= ticks)
   {
     struct thread * t = list_entry(list_pop_front(&blocked_threads), struct thread, elem);
     thread_unblock(t);
@@ -780,14 +780,14 @@ void threads_wakeup_blocked(int64_t ticks)
 // ana hrai7ly habetin
 void thread_sleep(int64_t after)
 {
-  enum intr_level old_level = intr_disable ();
   struct thread *t = thread_current();
   t->wake_up_after_tick = after;
+
+  // printf("Thread %d is going to sleep and will wake up after tick "PRId64"\n", t->tid, t->wake_up_after_tick);
 
   list_insert_ordered(&blocked_threads, &t->elem, threads_sort_by_wakeup_time_comp, NULL);
 
   thread_block();
-  intr_set_level (old_level);
 
 }
 
