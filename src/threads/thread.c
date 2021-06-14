@@ -250,11 +250,7 @@ thread_create (const char *name, int priority,
 
   thread_unblock (t);
 
-  enum intr_level old_level = intr_get_level();
-  if(!list_empty(&ready_list) && 
-  higher_priority_first(list_entry(list_front(&ready_list), struct thread, elem), thread_current()))
-    thread_yield();
-  intr_set_level(old_level);
+  yield_if_not_max_priority();
 
   return tid;
 }
@@ -449,7 +445,7 @@ void thread_remove_from_accquired_locks(struct lock* l){
 void
 thread_set_priority (int new_priority) 
 {
-  enum intr_level old_level = intr_get_level();
+  enum intr_level old_level = intr_disable();
   struct thread *cur = thread_current();
   cur->priority = new_priority;
   cur->donated_priority = (cur->donated_priority != -1) ? MAX(cur->donated_priority, new_priority) : -1;
@@ -814,6 +810,16 @@ void thread_sleep(int64_t after)
 
   thread_block();
 
+}
+
+// Do not call in interrupts
+void yield_if_not_max_priority(void)
+{
+  enum intr_level old_level = intr_disable();
+  if(!list_empty(&ready_list)
+  && higher_priority_first( list_entry(list_front(&ready_list), struct thread, elem), thread_current()))
+    thread_yield();
+  intr_set_level(old_level);
 }
 
 

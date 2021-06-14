@@ -170,6 +170,6 @@ void thread_remove_from_accquired_locks(struct lock*);
 void thread_sleep(int64_t);
 int thread_get_other_priority (struct thread *);
 bool higher_priority_first(struct thread *, struct thread *);
-
+void yield_if_not_max_priority(void);
 //end our code
 #endif /* threads/thread.h */

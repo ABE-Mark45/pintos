@@ -117,6 +117,7 @@ sema_up (struct semaphore *sema)  //our code:TODO get the maximum priority and u
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
   sema->value++;
+  yield_if_not_max_priority();
   intr_set_level (old_level);
 }
 
@@ -200,35 +201,41 @@ lock_acquire (struct lock *lock) //our code:call the fn responsible for updating
   ASSERT (!lock_held_by_current_thread (lock));
   //start our code
   // TODO: implement priority donation
+
+  enum intr_level old_level = intr_get_level();
+
   if(thread_mlfqs == PRIORITY_SCHEDULER)
   {
-      lock->highest_donated_priority = MAX(lock->highest_donated_priority, thread_current()->donated_priority);
-
+      int cur_priority = thread_get_priority();
       struct thread *cur = thread_current();
       short level = 0;
 
       if(lock->holder != NULL)
-        thread_current()->waiting_on_lock = lock;
-
+        cur->waiting_on_lock = lock;
 
       struct lock* lock_iter = lock;
-      while(lock_iter->holder != NULL 
-      && cur->donated_priority < lock_iter->holder->donated_priority
+      while(lock_iter != NULL && lock_iter->holder != NULL 
+      && higher_priority_first(cur, lock_iter->holder)
       && level < 8){
           // Holder is another thread holding a lock_iter the current thread wants to accquire
-          lock_iter->holder->donated_priority = cur->donated_priority;
+          lock_iter->holder->donated_priority = MAX(lock_iter->holder->donated_priority, cur_priority);
+          lock_iter->highest_donated_priority = MAX(lock_iter->highest_donated_priority, cur_priority);
           level++;
           lock_iter = lock_iter->holder->waiting_on_lock;
       }
       // ------------------------------end our code
       sema_down (&lock->semaphore);
-      thread_current()->waiting_on_lock = NULL;
       thread_add_to_accquired_locks(lock);
+      thread_current()->waiting_on_lock = NULL;
+      lock->highest_donated_priority = MAX(lock->highest_donated_priority, thread_get_priority());
   }
   else
       sema_down (&lock->semaphore);
   
+  // printf("[****] current_priority: %d\n", thread_get_priority());
   lock->holder = thread_current ();
+  
+  intr_set_level(old_level);
   //edit thread_current()->acquired_locks
 }
 
@@ -262,13 +269,16 @@ lock_release (struct lock *lock) //our code: call the function resposible to upd
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
+
+  enum intr_level old_level = intr_get_level();
+
   lock->highest_donated_priority = 0;
   lock->holder = NULL;
   if(thread_mlfqs == PRIORITY_SCHEDULER){
     thread_remove_from_accquired_locks(lock);
   }
   sema_up (&lock->semaphore);
-
+  intr_set_level(old_level);
 }
 //start our code
  int lock_get_donated_priority(struct lock *lock){
