@@ -743,9 +743,9 @@ bool threads_sort_by_priority(const struct list_elem *a_elem, const struct list_
   struct thread *a = list_entry(a_elem, struct thread, elem);
   struct thread *b = list_entry(b_elem, struct thread, elem);
   if(thread_mlfqs == PRIORITY_SCHEDULER)
-    return a->priority > b->priority;
+    return (a->priority == b->priority)? true: a->priority > b->priority;
   else
-    return a->donated_priority > b->donated_priority;
+    return (a->donated_priority == b->donated_priority)? true: a->donated_priority > b->donated_priority;
 }
 //return true if lock a highest priority is less than lock b highest priority as defined in list less fn
 bool acquired_lock_sort_by_priority(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
@@ -760,15 +760,17 @@ bool acquired_lock_sort_by_priority(const struct list_elem *a_elem, const struct
 void threads_wakeup_blocked(int64_t ticks)
 {
   struct thread *it;
-  short max_priority = PRI_MIN;
+  int max_priority = PRI_MIN;
   while(!list_empty(&blocked_threads)
   && (it = list_entry(list_begin(&blocked_threads), struct thread, elem) )
-  && it->wake_up_after_tick > ticks)
+  && it->wake_up_after_tick < ticks)
   {
     struct thread * t = list_entry(list_pop_front(&blocked_threads), struct thread, elem);
     thread_unblock(t);
     max_priority = MAX(max_priority, t->priority);
+    printf("[********] max_priority = %d\n", max_priority);
   }
+  // ASSERT(max_priority == 0);
 
   if(max_priority > thread_current()->priority)
     intr_yield_on_return();
