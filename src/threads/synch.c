@@ -224,7 +224,7 @@ lock_acquire (struct lock *lock) //our code:call the fn responsible for updating
           lock_iter = lock_iter->holder->waiting_on_lock;
       }
       // ------------------------------end our code
-      sema_down (&lock->semaphore);
+      sema_down (&lock->semaphore); 
       thread_add_to_accquired_locks(lock);
       thread_current()->waiting_on_lock = NULL;
       lock->highest_donated_priority = MAX(lock->highest_donated_priority, thread_get_priority());
