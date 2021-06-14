@@ -107,6 +107,7 @@ struct thread
     //finish our code
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    struct list *sem_list;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -162,9 +163,6 @@ void threads_update_statistics(bool);
 bool threads_sort_by_wakeup_time_comp(const struct list_elem *, const struct list_elem *, void * UNUSED);
 bool acquired_lock_sort_by_priority(const struct list_elem *, const struct list_elem *, void * UNUSED);
 bool threads_sort_by_priority(const struct list_elem *, const struct list_elem *, void * UNUSED);
-int thread_get_donated_priority(const struct thread*); 
-void thread_set_donated_priority(struct thread* ,int); 
-struct list thread_get_acquired_locks(const struct thread*);
 void thread_add_to_accquired_locks(struct lock*);
 void thread_remove_from_accquired_locks(struct lock*);
 void thread_sleep(int64_t);

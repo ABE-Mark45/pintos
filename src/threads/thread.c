@@ -385,15 +385,6 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 //start our code
-int thread_get_donated_priority(const struct thread* a){
-  return a->donated_priority;
-} 
-void thread_set_donated_priority(struct thread* a,int new_donated){
-  a->donated_priority=new_donated;
-} 
-struct list thread_get_acquired_locks(const struct thread* a){
-  return a->acquired_locks;
-}
 //to be called in acquire lock (inside sema down)
 void thread_add_to_accquired_locks(struct lock* l){
   struct thread *cur = thread_current();
@@ -449,6 +440,10 @@ thread_set_priority (int new_priority)
   struct thread *cur = thread_current();
   cur->priority = new_priority;
   cur->donated_priority = (cur->donated_priority != -1) ? MAX(cur->donated_priority, new_priority) : -1;
+
+  if(cur->sem_list != NULL)
+    insert_ordered_if_not_sorted(cur->sem_list, &cur->elem, threads_sort_by_priority);
+
 
   if(!list_empty(&ready_list) && 
   higher_priority_first(list_entry(list_front(&ready_list), struct thread, elem), cur))
@@ -610,7 +605,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   t->priority = priority;
   t->donated_priority = -1;
-
+  t->sem_list = NULL;
 
   t->magic = THREAD_MAGIC;
   t->nice_value = 0;            // TODO: Calculate priority at initialization

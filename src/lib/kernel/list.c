@@ -522,3 +522,18 @@ list_min (struct list *list, list_less_func *less, void *aux)
     }
   return min;
 }
+
+
+void insert_ordered_if_not_sorted(struct list *list, struct list_elem *elem,
+                                list_less_func *less)
+{
+  struct list_elem *before = elem->prev;
+  struct list_elem *after = elem->next;
+
+  if((before == list_begin(list) || less(before, elem, NULL))
+  && (after == list_end(list) || less(elem, after, NULL)))
+  {
+    list_remove(elem);
+    list_insert_ordered(list, elem, less, NULL);
+  }
+}

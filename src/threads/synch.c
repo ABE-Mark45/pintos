@@ -69,6 +69,7 @@ sema_down (struct semaphore *sema)
   while (sema->value == 0) 
     {
       list_insert_ordered (&sema->waiters, &thread_current ()->elem, threads_sort_by_priority, NULL);
+      thread_current()->sem_list = &sema->waiters;
       thread_block ();
     }
   sema->value--;
@@ -113,9 +114,13 @@ sema_up (struct semaphore *sema)  //our code:TODO get the maximum priority and u
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+  if (!list_empty (&sema->waiters))
+  {
+    struct thread *to_be_unlocked = list_entry (list_pop_front (&sema->waiters),
+                                struct thread, elem);
+    to_be_unlocked->sem_list = NULL;
+    thread_unblock (to_be_unlocked);
+  }
   sema->value++;
   yield_if_not_max_priority();
   intr_set_level (old_level);
@@ -219,6 +224,8 @@ lock_acquire (struct lock *lock) //our code:call the fn responsible for updating
       && level < 8){
           // Holder is another thread holding a lock_iter the current thread wants to accquire
           lock_iter->holder->donated_priority = MAX(lock_iter->holder->donated_priority, cur_priority);
+          if(lock_iter->holder->sem_list != NULL)
+            insert_ordered_if_not_sorted(lock_iter->holder->sem_list, &lock_iter->holder->elem, threads_sort_by_priority);
           lock_iter->highest_donated_priority = MAX(lock_iter->highest_donated_priority, cur_priority);
           level++;
           lock_iter = lock_iter->holder->waiting_on_lock;
