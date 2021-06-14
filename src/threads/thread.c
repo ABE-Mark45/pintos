@@ -398,7 +398,7 @@ struct list thread_get_acquired_locks(const struct thread* a){
 void thread_add_to_accquired_locks(struct lock* l){
   struct thread *cur = thread_current();
   list_insert_ordered(&cur->acquired_locks, &l->lock_elem, acquired_lock_sort_by_priority,NULL);//add new acquired lock in the list of the thread
-  cur->donated_priority = MAX(cur->donated_priority, l->highest_donated_priority);
+  // cur->donated_priority = MAX(cur->donated_priority, l->highest_donated_priority);
 
   // TODO: Thread switch
   //call upfdate donation
