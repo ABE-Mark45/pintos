@@ -4,7 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#define MAX(a,b) (a > b) ? a: b;
+#define MAX(a,b) ((a > b) ? (a): (b))
+
 
 
 /* States in a thread's life cycle. */
@@ -167,5 +168,8 @@ struct list thread_get_acquired_locks(const struct thread*);
 void thread_add_to_accquired_locks(struct lock*);
 void thread_remove_from_accquired_locks(struct lock*);
 void thread_sleep(int64_t);
+int thread_get_other_priority (struct thread *);
+bool higher_priority_first(struct thread *, struct thread *);
+
 //end our code
 #endif /* threads/thread.h */

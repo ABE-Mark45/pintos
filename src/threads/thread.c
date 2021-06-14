@@ -250,6 +250,12 @@ thread_create (const char *name, int priority,
 
   thread_unblock (t);
 
+  enum intr_level old_level = intr_get_level();
+  if(!list_empty(&ready_list) && 
+  higher_priority_first(list_entry(list_front(&ready_list), struct thread, elem), thread_current()))
+    thread_yield();
+  intr_set_level(old_level);
+
   return tid;
 }
 
@@ -353,6 +359,7 @@ void
 thread_yield (void) 
 {
   struct thread *cur = thread_current ();
+
   enum intr_level old_level;
   
   ASSERT (!intr_context ());
@@ -409,10 +416,10 @@ void thread_remove_from_accquired_locks(struct lock* l){
 
    //call update donation fn 
   if(list_empty(&cur->acquired_locks))
-    cur->donated_priority = cur->priority;
+    cur->donated_priority = -1;
   else
   {
-    cur->donated_priority = list_entry(list_begin(&cur->acquired_locks), struct lock, lock_elem)->highest_donated_priority;
+    cur->donated_priority = list_entry(list_front(&cur->acquired_locks), struct lock, lock_elem)->highest_donated_priority;
   }
 }
 /*modified thread is the thread which have one of it's locks case 1 added or case 2  removed so we update the donations for both it's acquired lock 
@@ -442,17 +449,25 @@ void thread_remove_from_accquired_locks(struct lock* l){
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  enum intr_level old_level = intr_get_level();
+  struct thread *cur = thread_current();
+  cur->priority = new_priority;
+  cur->donated_priority = (cur->donated_priority != -1) ? MAX(cur->donated_priority, new_priority) : -1;
+
   if(!list_empty(&ready_list) && 
-  list_entry(list_begin(&ready_list), struct thread, elem)->priority > new_priority)
+  higher_priority_first(list_entry(list_front(&ready_list), struct thread, elem), cur))
+  {
+    // printf("Current priority: %d, new thread_priority: %d\n", cur->donated_priority, list_entry(list_front(&ready_list), struct thread, elem)->donated_priority);
     thread_yield();
+  }
+  intr_set_level(old_level);
 }
 
 // WARNING: this only works on priority schedulers
 bool is_current_greatest_priority(void)
 {
   if(!list_empty(&ready_list) && 
-  list_entry(list_begin(&ready_list), struct thread, elem)->priority > thread_current()->priority)
+  higher_priority_first(list_entry(list_front(&ready_list), struct thread, elem), thread_current()))
     return false;
   return true;
 }
@@ -461,10 +476,13 @@ bool is_current_greatest_priority(void)
 int
 thread_get_priority (void) 
 {
-  if(thread_mlfqs == PRIORITY_SCHEDULER)
-    return thread_current()->donated_priority;
-  else
-    return thread_current()->priority;
+  return thread_get_other_priority(thread_current());
+}
+
+inline int
+thread_get_other_priority (struct thread * t) 
+{
+  return t->donated_priority != -1? t->donated_priority: t->priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -479,7 +497,7 @@ thread_set_nice (int nice UNUSED)
   // TODO: Thread yield stuff 
 
   if(!list_empty(&ready_list) && 
-  list_entry(list_begin(&ready_list), struct thread, elem)->priority > thread_current()->priority)
+  list_entry(list_front(&ready_list), struct thread, elem)->priority > thread_current()->priority)
     thread_yield();
 
 
@@ -595,7 +613,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
 
   t->priority = priority;
-  t->donated_priority = priority;
+  t->donated_priority = -1;
 
 
   t->magic = THREAD_MAGIC;
@@ -733,7 +751,7 @@ bool threads_sort_by_wakeup_time_comp(const struct list_elem *a_elem, const stru
   struct thread *a = list_entry(a_elem, struct thread, elem);
   struct thread *b = list_entry(b_elem, struct thread, elem);
   if(a->wake_up_after_tick == b->wake_up_after_tick)
-    return threads_sort_by_priority(a_elem, b_elem, NULL);
+    return higher_priority_first(a, b);
   return a->wake_up_after_tick < b->wake_up_after_tick;
 }
 //  return true if a _priority > b_priority 
@@ -742,11 +760,17 @@ bool threads_sort_by_priority(const struct list_elem *a_elem, const struct list_
   ASSERT(a_elem != NULL && b_elem != NULL);
   struct thread *a = list_entry(a_elem, struct thread, elem);
   struct thread *b = list_entry(b_elem, struct thread, elem);
-  if(thread_mlfqs == PRIORITY_SCHEDULER)
-    return (a->priority == b->priority)? true: a->priority > b->priority;
-  else
-    return (a->donated_priority == b->donated_priority)? true: a->donated_priority > b->donated_priority;
+  return higher_priority_first(a, b);
 }
+
+bool higher_priority_first(struct thread *a, struct thread *b)
+{
+  int priority_a = thread_get_other_priority(a);
+  int priority_b = thread_get_other_priority(b);
+  return (priority_a == priority_b)? false: priority_a > priority_b;
+}
+
+
 //return true if lock a highest priority is less than lock b highest priority as defined in list less fn
 bool acquired_lock_sort_by_priority(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
 {
@@ -762,17 +786,18 @@ void threads_wakeup_blocked(int64_t ticks)
   struct thread *it;
   int max_priority = PRI_MIN;
   while(!list_empty(&blocked_threads)
-  && (it = list_entry(list_begin(&blocked_threads), struct thread, elem) )
+  && (it = list_entry(list_front(&blocked_threads), struct thread, elem) )
   && it->wake_up_after_tick <= ticks)
   {
-    struct thread * t = list_entry(list_pop_front(&blocked_threads), struct thread, elem);
-    thread_unblock(t);
-    max_priority = MAX(max_priority, t->priority);
+    list_remove(&it->elem);
+    // struct thread * t = list_entry(list_pop_front(&blocked_threads), struct thread, elem);
+    thread_unblock(it);
+    max_priority = MAX(max_priority, thread_get_other_priority(it));
     // printf("[********] max_priority = %d\n", max_priority);
   }
   // ASSERT(max_priority == 0);
 
-  if(max_priority > thread_current()->priority)
+  if(max_priority > thread_get_priority())
     intr_yield_on_return();
 }
 
