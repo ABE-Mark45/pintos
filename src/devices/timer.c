@@ -183,7 +183,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 
   if(thread_mlfqs == BSD_SCHEDULER)
   {
-    threads_update_statistics(ticks % TIMER_FREQ == 0);
+    threads_update_statistics((ticks % TIMER_FREQ) == 0);
 
     if(ticks % 4 == 0)
     {

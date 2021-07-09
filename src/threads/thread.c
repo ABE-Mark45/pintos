@@ -97,9 +97,6 @@ thread_init (void)
 {
   ASSERT (intr_get_level () == INTR_OFF);
 
-  // MY CODE
-  load_avg = 0;
-  // --------------------
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
@@ -142,11 +139,13 @@ void threads_update_statistics(bool one_second)
     uint32_t a = MUL_F_I(load_avg, 59);
     a = DIV_F_I(a, 60);
     
-    uint32_t b = I_TO_F(list_size(&ready_list));
+    uint32_t running_threads_count = list_size(&ready_list) + (thread_current() != idle_thread);
+
+    uint32_t b = I_TO_F(running_threads_count);
     b = DIV_F_I(b, 60);
 
     load_avg = ADD_F_F(a, b);
-    
+
     struct list_elem * cur_iter = list_head(&all_list);
     struct thread *cur;
     while((cur_iter = list_next(cur_iter)) != list_tail(&all_list))
@@ -506,7 +505,7 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  return F_TO_I_DOWN(load_avg) * 100;
+  return F_TO_I_ROUND(MUL_F_I(load_avg, 100));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -514,7 +513,7 @@ int
 thread_get_recent_cpu (void) 
 {
   /* Not yet implemented. */
-  return F_TO_I_DOWN(thread_current()->recent_cpu) * 100;
+  return F_TO_I_ROUND(MUL_F_I(thread_current()->recent_cpu, 100));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
