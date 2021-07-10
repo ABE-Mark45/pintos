@@ -179,7 +179,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
 
-  is_time_sliced_ended();
 
   if(thread_mlfqs == BSD_SCHEDULER)
   {
@@ -187,14 +186,17 @@ timer_interrupt (struct intr_frame *args UNUSED)
 
     if(ticks % 4 == 0)
     {
-      struct thread *t = thread_current();
-      short new_priority = PRI_MAX - F_TO_I_DOWN(DIV_F_I(t->recent_cpu, 4)) - t->nice_value * 2;
-      thread_current()->priority = new_priority;
-      if(is_current_greatest_priority())
-        intr_yield_on_return();
+      // struct thread *cur = thread_current();
+      // int new_priority = F_TO_I_DOWN(SUB_F_I(SUB_F_F(I_TO_F(PRI_MAX) ,DIV_F_I(cur->recent_cpu, 4)), cur->nice_value * 2));
+      // cur->priority = MIN(PRI_MAX, MAX(PRI_MIN, new_priority)); 
+      bsd_recalc_priority();
+      // if(is_current_greatest_priority())
+      //   intr_yield_on_return();
 
     }
   }
+
+  is_time_sliced_ended();
   threads_wakeup_blocked(ticks);
   thread_tick ();
 }

@@ -136,26 +136,37 @@ void threads_update_statistics(bool one_second)
   
   if(one_second)
   {
-    uint32_t a = MUL_F_I(load_avg, 59);
-    a = DIV_F_I(a, 60);
-    
     uint32_t running_threads_count = list_size(&ready_list) + (thread_current() != idle_thread);
-
-    uint32_t b = I_TO_F(running_threads_count);
-    b = DIV_F_I(b, 60);
-
-    load_avg = ADD_F_F(a, b);
+    load_avg = ADD_F_F(DIV_F_I(MUL_F_I(load_avg, 59), 60), DIV_F_I(I_TO_F(running_threads_count), 60) );
 
     struct list_elem * cur_iter = list_head(&all_list);
     struct thread *cur;
     while((cur_iter = list_next(cur_iter)) != list_tail(&all_list))
     {
       cur = list_entry(cur_iter, struct thread, elem);
+      if(cur == idle_thread)
+        continue;
       uint32_t recent_cpu = cur->recent_cpu;
       uint32_t load_avg_double = MUL_F_I(load_avg,2);
       cur->recent_cpu = ADD_F_I(MUL_F_F(DIV_F_F(load_avg_double, ADD_F_I(load_avg_double, 1)), recent_cpu), cur->nice_value);
+      int new_priority = F_TO_I_DOWN(SUB_F_I(SUB_F_F(I_TO_F(PRI_MAX) ,DIV_F_I(cur->recent_cpu, 4)), cur->nice_value * 2));
+      cur->priority = MIN(PRI_MAX, MAX(PRI_MIN, new_priority)); 
     }
 
+  }
+}
+
+void bsd_recalc_priority(void)
+{
+  struct list_elem * cur_iter = list_head(&all_list);
+  struct thread *cur;
+  while((cur_iter = list_next(cur_iter)) != list_tail(&all_list))
+  {
+    cur = list_entry(cur_iter, struct thread, elem);
+    if(cur == idle_thread)
+      continue;
+    int new_priority = F_TO_I_DOWN(SUB_F_I(SUB_F_F(I_TO_F(PRI_MAX) ,DIV_F_I(cur->recent_cpu, 4)), cur->nice_value * 2));
+    cur->priority = MIN(PRI_MAX, MAX(PRI_MIN, new_priority)); 
   }
 }
 
@@ -408,30 +419,6 @@ void thread_remove_from_accquired_locks(struct lock* l){
     cur->donated_priority = list_entry(list_front(&cur->acquired_locks), struct lock, lock_elem)->highest_donated_priority;
   }
 }
-/*modified thread is the thread which have one of it's locks case 1 added or case 2  removed so we update the donations for both it's acquired lock 
-                    case 2 remove lock:             modified thread
-                                                   /         |      \
-  current acquired locks :                     A           B         C       so we see which has the highest priority and give it  to modified ,
-   in the removed lock itself                  removed lock
-                                               /    |     \
-                                              t1    t2    t3 
-                       let's assume that we had a running thread which had a ccertain sight through the waiting priorities according to DONATION_DEPTH so we itterate 
-                       in the new waiting list untill we reach the depth and test threads priorities aganist the lock highest priority  and update if it is higher
-
-        case 1: add thread to lock as waiting       lock A 
-                                                  /    |     \                                   
-                                                t1     t2    new added thread(modified thread) 
-                                            holds it  waits         waits for the lock after t2
-                            so in this case we check the new added thread (modidied thread) to see if it has a higher priority of the highest priority of the lock 
-                            if it's smaller so do nothing 
-                            else if (it's higher than &&it's depth in the waiting <= DONATION_DEPTH) then update the highest priority variable which exist in the lock A
-                             and for each thread in the waiting list update it's donated priority with the lock's priority
-
-
-*/
-//end our code
-
-/* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
 {
@@ -452,6 +439,10 @@ thread_set_priority (int new_priority)
   }
   intr_set_level(old_level);
 }
+
+
+
+
 
 // WARNING: this only works on priority schedulers
 bool is_current_greatest_priority(void)
@@ -481,15 +472,15 @@ thread_set_nice (int nice UNUSED)
 {
   /* Not yet implemented. */
   thread_current() ->nice_value = nice;
-  
-  thread_current() ->priority = PRI_MAX - (thread_current()->recent_cpu / 4) - (nice * 2);
+  int new_priority = PRI_MAX - F_TO_I_ROUND(DIV_F_I(thread_current()->recent_cpu, 4)) - (nice * 2);
+  thread_current() ->priority = MIN(PRI_MAX, MAX(PRI_MIN, new_priority)); 
 
   // TODO: Thread yield stuff 
 
-  if(!list_empty(&ready_list) && 
-  list_entry(list_front(&ready_list), struct thread, elem)->priority > thread_current()->priority)
-    thread_yield();
-
+  // if(!list_empty(&ready_list) && 
+  // list_entry(list_front(&ready_list), struct thread, elem)->priority > thread_current()->priority)
+  //   thread_yield();
+  yield_if_not_max_priority();
 
 }
 
@@ -512,7 +503,6 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
   return F_TO_I_ROUND(MUL_F_I(thread_current()->recent_cpu, 100));
 }
 
@@ -607,8 +597,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->sem_list = NULL;
 
   t->magic = THREAD_MAGIC;
-  t->nice_value = 0;            // TODO: Calculate priority at initialization
-  t->recent_cpu = 0;
+  
+  t->nice_value = (t == initial_thread? 0: thread_current()->nice_value);
+  t->recent_cpu = (t == initial_thread? 0: thread_current()->recent_cpu);
   //start our code
   list_init(&t->acquired_locks);
   t->waiting_on_lock = NULL;
@@ -798,7 +789,8 @@ void thread_sleep(int64_t after)
   struct thread *t = thread_current();
   t->wake_up_after_tick = after;
 
-  // printf("Thread %d is going to sleep and will wake up after tick "PRId64"\n", t->tid, t->wake_up_after_tick);
+  printf("Thread %d is going to sleep and will wake up after tick %"PRId64"\n", t->tid, t->wake_up_after_tick);
+  printf("recent_cpu=%d.%02d\n", thread_get_recent_cpu ()/100, thread_get_recent_cpu () % 100);
 
   list_insert_ordered(&blocked_threads, &t->elem, threads_sort_by_wakeup_time_comp, NULL);
 
@@ -817,7 +809,7 @@ void yield_if_not_max_priority(void)
 }
 
 
-void is_time_sliced_ended()
+inline void is_time_sliced_ended()
 {
   if(thread_ticks == TIME_SLICE)
     intr_yield_on_return();

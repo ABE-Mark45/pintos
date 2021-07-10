@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #define MAX(a,b) ((a > b) ? (a): (b))
+#define MIN(a,b) ((a < b) ? (a): (b))
 
 
 
@@ -169,5 +170,7 @@ void thread_sleep(int64_t);
 int thread_get_other_priority (struct thread *);
 bool higher_priority_first(struct thread *, struct thread *);
 void yield_if_not_max_priority(void);
+void bsd_recalc_priority (void);
+
 //end our code
 #endif /* threads/thread.h */
