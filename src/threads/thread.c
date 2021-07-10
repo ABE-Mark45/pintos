@@ -135,7 +135,7 @@ void threads_update_statistics(bool one_second)
   if(one_second)
   {
     uint32_t running_threads_count = list_size(&ready_list) + (thread_current() != idle_thread);
-    load_avg = ADD_F_F(DIV_F_I(MUL_F_I(load_avg, 59), 60), DIV_F_I(I_TO_F(running_threads_count), 60) );
+    load_avg = ADD_F_F(MUL_F_I(DIV_F_I(load_avg, 60), 59), DIV_F_I(I_TO_F(running_threads_count), 60) );
 
     struct list_elem * cur_iter = list_head(&all_list);
     struct thread *cur;
@@ -152,10 +152,9 @@ void threads_update_statistics(bool one_second)
       // int new_priority = F_TO_I_DOWN(SUB_F_I(SUB_F_F(I_TO_F(PRI_MAX) ,DIV_F_I(cur->recent_cpu, 4)), cur->nice_value * 2));
       // cur->priority = MIN(PRI_MAX, MAX(PRI_MIN, new_priority)); 
     }
-
   }
 
-    if(thread_current() != idle_thread)
+    else if(thread_current() != idle_thread)
       thread_current()->recent_cpu = ADD_F_I(thread_current()->recent_cpu, 1);
 
 }
@@ -403,11 +402,6 @@ thread_foreach (thread_action_func *func, void *aux)
 void thread_add_to_accquired_locks(struct lock* l){
   struct thread *cur = thread_current();
   list_insert_ordered(&cur->acquired_locks, &l->lock_elem, acquired_lock_sort_by_priority,NULL);//add new acquired lock in the list of the thread
-  // cur->donated_priority = MAX(cur->donated_priority, l->highest_donated_priority);
-
-  // TODO: Thread switch
-  //call upfdate donation
-
 }
 //to be called in release lock
 void thread_remove_from_accquired_locks(struct lock* l){
@@ -419,10 +413,9 @@ void thread_remove_from_accquired_locks(struct lock* l){
   if(list_empty(&cur->acquired_locks))
     cur->donated_priority = -1;
   else
-  {
     cur->donated_priority = list_entry(list_front(&cur->acquired_locks), struct lock, lock_elem)->highest_donated_priority;
-  }
 }
+
 void
 thread_set_priority (int new_priority) 
 {
@@ -433,6 +426,9 @@ thread_set_priority (int new_priority)
 
   if(cur->sem_list != NULL)
     insert_ordered_if_not_sorted(cur->sem_list, &cur->elem, threads_sort_by_priority);
+  
+  if(cur->waiting_on_cond != NULL)
+    insert_ordered_if_not_sorted(&cur->waiting_on_cond->waiters, &cur->waiting_on_cond_elem->elem, cond_sort_waiters);
 
 
   if(!list_empty(&ready_list) && 
@@ -764,6 +760,7 @@ bool acquired_lock_sort_by_priority(const struct list_elem *a_elem, const struct
   struct lock *b = list_entry(b_elem, struct lock, lock_elem);
   return a->highest_donated_priority > b->highest_donated_priority;
 }
+
 
 
 void threads_wakeup_blocked(int64_t ticks)

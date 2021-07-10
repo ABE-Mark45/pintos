@@ -104,7 +104,8 @@ struct thread
     int donated_priority;
     struct list acquired_locks;           /* List  for all acquired locks.(initiated in init_thread) */
     struct lock* waiting_on_lock;
-   
+    struct condition* waiting_on_cond;
+    struct semaphore_elem* waiting_on_cond_elem;
     //finish our code
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */

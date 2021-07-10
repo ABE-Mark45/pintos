@@ -11,6 +11,15 @@ struct semaphore
     struct list waiters;        /* List of waiting threads. */
   };
 
+/* One semaphore in a list. */
+struct semaphore_elem 
+  {
+    struct list_elem elem;              /* List element. */
+    struct semaphore semaphore;         /* This semaphore. */
+    struct thread* waiting_thread;      // redundant storage to simplify keeping waiters sorted
+  };
+
+
 void sema_init (struct semaphore *, unsigned value);
 void sema_down (struct semaphore *);
 bool sema_try_down (struct semaphore *);
@@ -47,6 +56,7 @@ void cond_init (struct condition *);
 void cond_wait (struct condition *, struct lock *);
 void cond_signal (struct condition *, struct lock *);
 void cond_broadcast (struct condition *, struct lock *);
+bool cond_sort_waiters(const struct list_elem *, const struct list_elem *, void * UNUSED);
 
 /* Optimization barrier.
 

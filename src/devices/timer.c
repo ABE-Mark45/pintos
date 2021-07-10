@@ -189,6 +189,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
       // int new_priority = F_TO_I_DOWN(SUB_F_I(SUB_F_F(I_TO_F(PRI_MAX) ,DIV_F_I(cur->recent_cpu, 4)), cur->nice_value * 2));
       // cur->priority = MIN(PRI_MAX, MAX(PRI_MIN, new_priority)); 
       bsd_recalc_priority();
+      
       // if(is_current_greatest_priority())
       //   intr_yield_on_return();
 
