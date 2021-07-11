@@ -135,16 +135,11 @@ void threads_update_statistics(bool one_second)
   if(one_second)
   {
     uint32_t running_threads_count = list_size(&ready_list) + (thread_current() != idle_thread);
-    // printf("running_threads_count=%u\n",running_threads_count);
-    // printf("load_avg=%d.%02d\n", thread_get_load_avg()/100, thread_get_load_avg()%100);
-    // load_avg = ADD_F_F(DIV_F_I(MUL_F_I(load_avg, 59), 60), DIV_F_I(I_TO_F(running_threads_count), 60) );
     load_avg = ADD_F_F(DIV_F_I(MUL_F_I(load_avg, 59), 60), DIV_F_I(I_TO_F(running_threads_count), 60) );
 
-    // printf("load_avg=%d.%02d\n\n", thread_get_load_avg()/100, thread_get_load_avg()%100);
 
     struct list_elem * cur_iter = list_head(&all_list);
     struct thread *cur;
-    // printf("All element list size = %u\n", list_size(&all_list));
     while((cur_iter = list_next(cur_iter)) != list_tail(&all_list))
     {
       cur = list_entry(cur_iter, struct thread, allelem);
@@ -306,7 +301,7 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   //list_push_back (&ready_list, &t->elem);
-  list_insert_ordered (&ready_list, &t->elem, threads_sort_by_priority, NULL);
+  list_insert_ordered (&ready_list, &t->elem, threads_priority_comp, NULL);
   t->status = THREAD_READY;
 //start our code  
   intr_set_level (old_level);
@@ -379,7 +374,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread)
-    list_insert_ordered(&ready_list, &cur->elem, threads_sort_by_priority, NULL); // TODO: check insert with prority ordered
+    list_insert_ordered(&ready_list, &cur->elem, threads_priority_comp, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -405,7 +400,7 @@ thread_foreach (thread_action_func *func, void *aux)
 //to be called in acquire lock (inside sema down)
 void thread_add_to_accquired_locks(struct lock* l){
   struct thread *cur = thread_current();
-  list_insert_ordered(&cur->acquired_locks, &l->lock_elem, acquired_lock_sort_by_priority,NULL);//add new acquired lock in the list of the thread
+  list_insert_ordered(&cur->acquired_locks, &l->lock_elem, locks_priority_comp,NULL);//add new acquired lock in the list of the thread
 }
 //to be called in release lock
 void thread_remove_from_accquired_locks(struct lock* l){
@@ -429,14 +424,14 @@ thread_set_priority (int new_priority)
   cur->donated_priority = (cur->donated_priority != -1) ? MAX(cur->donated_priority, new_priority) : -1;
 
   if(cur->sem_list != NULL)
-    insert_ordered_if_not_sorted(cur->sem_list, &cur->elem, threads_sort_by_priority);
+    insert_ordered_if_not_sorted(cur->sem_list, &cur->elem, threads_priority_comp);
   
   if(cur->waiting_on_cond != NULL)
     insert_ordered_if_not_sorted(&cur->waiting_on_cond->waiters, &cur->waiting_on_cond_elem->elem, cond_sort_waiters);
 
 
   if(!list_empty(&ready_list) && 
-  higher_priority_first(list_entry(list_front(&ready_list), struct thread, elem), cur))
+  is_higher_priority_first(list_entry(list_front(&ready_list), struct thread, elem), cur))
   {
     // printf("Current priority: %d, new thread_priority: %d\n", cur->donated_priority, list_entry(list_front(&ready_list), struct thread, elem)->donated_priority);
     thread_yield();
@@ -452,7 +447,7 @@ thread_set_priority (int new_priority)
 bool is_current_greatest_priority(void)
 {
   if(!list_empty(&ready_list) && 
-  higher_priority_first(list_entry(list_front(&ready_list), struct thread, elem), thread_current()))
+  is_higher_priority_first(list_entry(list_front(&ready_list), struct thread, elem), thread_current()))
     return false;
   return true;
 }
@@ -732,25 +727,25 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 //start our code 
 //return true if awake up less than b wake up
-bool threads_sort_by_wakeup_time_comp(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
+bool threads_wakeup_comp(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
 {
   ASSERT(a_elem != NULL && b_elem != NULL);
   struct thread *a = list_entry(a_elem, struct thread, elem);
   struct thread *b = list_entry(b_elem, struct thread, elem);
   if(a->wake_up_after_tick == b->wake_up_after_tick)
-    return higher_priority_first(a, b);
+    return is_higher_priority_first(a, b);
   return a->wake_up_after_tick < b->wake_up_after_tick;
 }
 //  return true if a _priority > b_priority 
-bool threads_sort_by_priority(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
+bool threads_priority_comp(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
 {
   ASSERT(a_elem != NULL && b_elem != NULL);
   struct thread *a = list_entry(a_elem, struct thread, elem);
   struct thread *b = list_entry(b_elem, struct thread, elem);
-  return higher_priority_first(a, b);
+  return is_higher_priority_first(a, b);
 }
 
-bool higher_priority_first(struct thread *a, struct thread *b)
+bool is_higher_priority_first(struct thread *a, struct thread *b)
 {
   int priority_a = thread_get_other_priority(a);
   int priority_b = thread_get_other_priority(b);
@@ -759,7 +754,7 @@ bool higher_priority_first(struct thread *a, struct thread *b)
 
 
 //return true if lock a highest priority is less than lock b highest priority as defined in list less fn
-bool acquired_lock_sort_by_priority(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
+bool locks_priority_comp(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
 {
   ASSERT(a_elem != NULL && b_elem != NULL);
   struct lock *a = list_entry(a_elem, struct lock, lock_elem);
@@ -778,12 +773,9 @@ void threads_wakeup_blocked(int64_t ticks)
   && it->wake_up_after_tick <= ticks)
   {
     list_remove(&it->elem);
-    // struct thread * t = list_entry(list_pop_front(&blocked_threads), struct thread, elem);
     thread_unblock(it);
     max_priority = MAX(max_priority, thread_get_other_priority(it));
-    // printf("[********] max_priority = %d\n", max_priority);
   }
-  // ASSERT(max_priority == 0);
 
   if(max_priority > thread_get_priority())
     intr_yield_on_return();
@@ -796,10 +788,7 @@ void thread_sleep(int64_t after)
   struct thread *t = thread_current();
   t->wake_up_after_tick = after;
 
-  // printf("Thread %d is going to sleep and will wake up after tick %"PRId64"\n", t->tid, t->wake_up_after_tick);
-  // printf("recent_cpu=%d\n", thread_get_recent_cpu());
-  
-  list_insert_ordered(&blocked_threads, &t->elem, threads_sort_by_wakeup_time_comp, NULL);
+  list_insert_ordered(&blocked_threads, &t->elem, threads_wakeup_comp, NULL);
 
   thread_block();
 
@@ -810,7 +799,7 @@ void yield_if_not_max_priority(void)
 {
   enum intr_level old_level = intr_disable();
   if(!list_empty(&ready_list)
-  && higher_priority_first( list_entry(list_front(&ready_list), struct thread, elem), thread_current()))
+  && is_higher_priority_first( list_entry(list_front(&ready_list), struct thread, elem), thread_current()))
     thread_yield();
   intr_set_level(old_level);
 }

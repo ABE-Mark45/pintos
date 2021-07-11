@@ -68,7 +68,7 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_insert_ordered (&sema->waiters, &thread_current ()->elem, threads_sort_by_priority, NULL);
+      list_insert_ordered (&sema->waiters, &thread_current ()->elem, threads_priority_comp, NULL);
       thread_current()->sem_list = &sema->waiters;
       thread_block ();
     }
@@ -220,21 +220,20 @@ lock_acquire (struct lock *lock) //our code:call the fn responsible for updating
 
       struct lock* lock_iter = lock;
       while(lock_iter != NULL && lock_iter->holder != NULL 
-      && higher_priority_first(cur, lock_iter->holder)
+      && is_higher_priority_first(cur, lock_iter->holder)
       && level < 8){
           // Holder is another thread holding a lock_iter the current thread wants to accquire
           lock_iter->holder->donated_priority = MAX(lock_iter->holder->donated_priority, cur_priority);
           if(lock_iter->holder->sem_list != NULL)
-            insert_ordered_if_not_sorted(lock_iter->holder->sem_list, &lock_iter->holder->elem, threads_sort_by_priority);
+            insert_ordered_if_not_sorted(lock_iter->holder->sem_list, &lock_iter->holder->elem, threads_priority_comp);
           
           if(lock_iter->holder->waiting_on_cond != NULL)
-            insert_ordered_if_not_sorted(&lock_iter->holder->waiting_on_cond->waiters, &lock_iter->holder->waiting_on_cond_elem->elem, cond_sort_waiters);
+            insert_ordered_if_not_sorted(&lock_iter->holder->waiting_on_cond->waiters, &lock_iter->holder->waiting_on_cond_elem->elem, cond_waiters_comp);
 
           lock_iter->highest_donated_priority = lock_iter->holder->donated_priority;
           level++;
           lock_iter = lock_iter->holder->waiting_on_lock;
       }
-      // ------------------------------end our code
       sema_down (&lock->semaphore); 
       thread_add_to_accquired_locks(lock);
       thread_current()->waiting_on_lock = NULL;
@@ -243,11 +242,9 @@ lock_acquire (struct lock *lock) //our code:call the fn responsible for updating
   else
       sema_down (&lock->semaphore);
   
-  // printf("[****] current_priority: %d\n", thread_get_priority());
   lock->holder = thread_current ();
   
   intr_set_level(old_level);
-  //edit thread_current()->acquired_locks
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -358,7 +355,7 @@ cond_wait (struct condition *cond, struct lock *lock)
   thread_current()->waiting_on_cond = cond;
   sema_init (&waiter.semaphore, 0);
   // list_push_back (&cond->waiters, &waiter.elem);
-  list_insert_ordered(&cond->waiters, &waiter.elem, cond_sort_waiters, NULL);
+  list_insert_ordered(&cond->waiters, &waiter.elem, cond_waiters_comp, NULL);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);
@@ -406,11 +403,11 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 }
 
 
-bool cond_sort_waiters(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
+bool cond_waiters_comp(const struct list_elem *a_elem, const struct list_elem *b_elem, void *aux UNUSED)
 {
   ASSERT(a_elem != NULL && b_elem != NULL);
   struct thread *a = list_entry(a_elem, struct semaphore_elem, elem)->waiting_thread;
   struct thread *b = list_entry(b_elem, struct semaphore_elem, elem)->waiting_thread;
-  return higher_priority_first(a, b);
+  return is_higher_priority_first(a, b);
 
 }

@@ -103,9 +103,9 @@ struct thread
     int64_t wake_up_after_tick;
     int donated_priority;
     struct list acquired_locks;           /* List  for all acquired locks.(initiated in init_thread) */
-    struct lock* waiting_on_lock;
-    struct condition* waiting_on_cond;
-    struct semaphore_elem* waiting_on_cond_elem;
+    struct lock* waiting_on_lock;         // lock the thread waits to acquire
+    struct condition* waiting_on_cond;    // con_var the thread waits for
+    struct semaphore_elem* waiting_on_cond_elem;   // semaphore_elem in the waiter of cond_var
     //finish our code
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -162,14 +162,14 @@ void is_time_sliced_ended(void);
 bool is_current_greatest_priority(void);
 void threads_wakeup_blocked(int64_t ticks);
 void threads_update_statistics(bool);
-bool threads_sort_by_wakeup_time_comp(const struct list_elem *, const struct list_elem *, void * UNUSED);
-bool acquired_lock_sort_by_priority(const struct list_elem *, const struct list_elem *, void * UNUSED);
-bool threads_sort_by_priority(const struct list_elem *, const struct list_elem *, void * UNUSED);
+bool threads_wakeup_comp(const struct list_elem *, const struct list_elem *, void * UNUSED);
+bool locks_priority_comp(const struct list_elem *, const struct list_elem *, void * UNUSED);
+bool threads_priority_comp(const struct list_elem *, const struct list_elem *, void * UNUSED);
 void thread_add_to_accquired_locks(struct lock*);
 void thread_remove_from_accquired_locks(struct lock*);
 void thread_sleep(int64_t);
 int thread_get_other_priority (struct thread *);
-bool higher_priority_first(struct thread *, struct thread *);
+bool is_higher_priority_first(struct thread *, struct thread *);
 void yield_if_not_max_priority(void);
 void bsd_recalc_priority (void);
 
