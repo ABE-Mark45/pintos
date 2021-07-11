@@ -52,7 +52,7 @@ struct kernel_thread_frame
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
-static uint32_t load_avg;
+static int load_avg;
 
 
 /* Scheduling. */
@@ -135,7 +135,12 @@ void threads_update_statistics(bool one_second)
   if(one_second)
   {
     uint32_t running_threads_count = list_size(&ready_list) + (thread_current() != idle_thread);
-    load_avg = ADD_F_F(MUL_F_I(DIV_F_I(load_avg, 60), 59), DIV_F_I(I_TO_F(running_threads_count), 60) );
+    // printf("running_threads_count=%u\n",running_threads_count);
+    // printf("load_avg=%d.%02d\n", thread_get_load_avg()/100, thread_get_load_avg()%100);
+    // load_avg = ADD_F_F(DIV_F_I(MUL_F_I(load_avg, 59), 60), DIV_F_I(I_TO_F(running_threads_count), 60) );
+    load_avg = ADD_F_F(DIV_F_I(MUL_F_I(load_avg, 59), 60), DIV_F_I(I_TO_F(running_threads_count), 60) );
+
+    // printf("load_avg=%d.%02d\n\n", thread_get_load_avg()/100, thread_get_load_avg()%100);
 
     struct list_elem * cur_iter = list_head(&all_list);
     struct thread *cur;
@@ -143,14 +148,12 @@ void threads_update_statistics(bool one_second)
     while((cur_iter = list_next(cur_iter)) != list_tail(&all_list))
     {
       cur = list_entry(cur_iter, struct thread, allelem);
-      if(cur == idle_thread)
-        continue;
-      uint32_t recent_cpu = cur->recent_cpu;
-      uint32_t load_avg_double = MUL_F_I(load_avg,2);
-      // printf("[*] thread in list=%s\n", cur->name);
-      cur->recent_cpu = ADD_F_I(MUL_F_F(DIV_F_F(load_avg_double, ADD_F_I(load_avg_double, 1)), recent_cpu), cur->nice_value);
-      // int new_priority = F_TO_I_DOWN(SUB_F_I(SUB_F_F(I_TO_F(PRI_MAX) ,DIV_F_I(cur->recent_cpu, 4)), cur->nice_value * 2));
-      // cur->priority = MIN(PRI_MAX, MAX(PRI_MIN, new_priority)); 
+      if(cur != idle_thread)
+      {
+        int recent_cpu = cur->recent_cpu;
+        int load_avg_double = MUL_F_I(load_avg,2);
+        cur->recent_cpu = ADD_F_I(MUL_F_F(DIV_F_F(load_avg_double, ADD_F_I(load_avg_double, 1)), recent_cpu), cur->nice_value);
+      }
     }
   }
 
@@ -168,7 +171,8 @@ void bsd_recalc_priority(void)
     cur = list_entry(cur_iter, struct thread, allelem);
     if(cur == idle_thread)
       continue;
-    int new_priority = F_TO_I_DOWN(SUB_F_I(SUB_F_F(I_TO_F(PRI_MAX) ,DIV_F_I(cur->recent_cpu, 4)), cur->nice_value * 2));
+    // int new_priority = F_TO_I_ROUND(SUB_F_I(SUB_F_F(I_TO_F(PRI_MAX) ,DIV_F_I(cur->recent_cpu, 4)), cur->nice_value * 2));
+    int new_priority = PRI_MAX - F_TO_I_DOWN(DIV_F_I(cur->recent_cpu, 4)) - (2 * cur->nice_value);
     cur->priority = MIN(PRI_MAX, MAX(PRI_MIN, new_priority)); 
   }
 }
@@ -471,8 +475,10 @@ void
 thread_set_nice (int nice UNUSED) 
 {
   /* Not yet implemented. */
-  thread_current() ->nice_value = nice;
-  int new_priority = PRI_MAX - F_TO_I_ROUND(DIV_F_I(thread_current()->recent_cpu, 4)) - (nice * 2);
+  struct thread* cur = thread_current();
+  cur->nice_value = nice;
+  // int new_priority = F_TO_I_ROUND(SUB_F_I(SUB_F_F(I_TO_F(PRI_MAX) ,DIV_F_I(cur->recent_cpu, 4)), cur->nice_value * 2));
+  int new_priority = PRI_MAX - F_TO_I_DOWN(DIV_F_I(thread_current()->recent_cpu, 4)) - (nice * 2);
   thread_current() ->priority = MIN(PRI_MAX, MAX(PRI_MIN, new_priority)); 
 
   // TODO: Thread yield stuff 

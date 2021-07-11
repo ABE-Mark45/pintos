@@ -181,9 +181,9 @@ timer_interrupt (struct intr_frame *args UNUSED)
 
   if(thread_mlfqs == BSD_SCHEDULER)
   {
-    threads_update_statistics((ticks % TIMER_FREQ) == 0);
+    threads_update_statistics((timer_ticks() % TIMER_FREQ) == 0);
 
-    if(ticks % 4 == 0)
+    if(timer_ticks() % 4 == 0)
     {
       // struct thread *cur = thread_current();
       // int new_priority = F_TO_I_DOWN(SUB_F_I(SUB_F_F(I_TO_F(PRI_MAX) ,DIV_F_I(cur->recent_cpu, 4)), cur->nice_value * 2));

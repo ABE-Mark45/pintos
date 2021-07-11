@@ -98,8 +98,8 @@ struct thread
    
     struct list_elem allelem;           /* List element for all threads list. */
     //start our code 
-    short nice_value;
-    uint32_t recent_cpu;
+    int nice_value;
+    int recent_cpu;
     int64_t wake_up_after_tick;
     int donated_priority;
     struct list acquired_locks;           /* List  for all acquired locks.(initiated in init_thread) */

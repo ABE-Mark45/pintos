@@ -15,17 +15,17 @@
 #define MUL_F_I(X,N) (X*N)            // Multiply fixed integer
 #define DIV_F_I(X,N) (X/N)            // Divide fixed integer
 
-static inline int32_t MUL_F_F(int32_t x, int32_t y)
+static inline int MUL_F_F(int x, int y)
 {
     return ((int64_t)x) * y / F;
 }
 
-static inline int32_t DIV_F_F(int32_t x, int32_t y)
+static inline int DIV_F_F(int x, int y)
 {
     return ((int64_t)x) * F / y;
 }
 
-static inline int32_t F_TO_I_ROUND(int32_t x)
+static inline int F_TO_I_ROUND(int x)
 {
     if(x >= 0)
         return (x + F/2) / F;
