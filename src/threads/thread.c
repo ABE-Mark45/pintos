@@ -427,7 +427,7 @@ thread_set_priority (int new_priority)
     insert_ordered_if_not_sorted(cur->sem_list, &cur->elem, threads_priority_comp);
   
   if(cur->waiting_on_cond != NULL)
-    insert_ordered_if_not_sorted(&cur->waiting_on_cond->waiters, &cur->waiting_on_cond_elem->elem, cond_sort_waiters);
+    insert_ordered_if_not_sorted(&cur->waiting_on_cond->waiters, &cur->waiting_on_cond_elem->elem, cond_waiters_comp);
 
 
   if(!list_empty(&ready_list) && 
@@ -810,54 +810,3 @@ inline void is_time_sliced_ended()
   if(thread_ticks == TIME_SLICE)
     intr_yield_on_return();
 }
-
-//<------------------------------------------some comments for requirments and visualization------------------------------------------------------------->
-/*  
-                    1.priority scheduling TODO(check if we need an if statment in timer interrupt to see in which mode we run (priority or advanced))
-                    check for max priority in ready queue and if there exist a priority such that >current_thread (donated) priority  --> TODO(need to add donated
-                    priority var in thread ) , we call thread_yield()for current
-
-                    2.priority Donation  where to apply :in priority scheduler (when mflq==false) and around locks
-                                                                 /                                              \
-                                                                /                                                \
-                                                               /                                                  \
-                                                                                                          when we have a thread with low priority 
-                                                      in priority scheduling                            holding a mutex lock  which there is a higher 
-                                                      we check aganist donated                          priority waits (blocked)for that same lock with a defined 
-                                                                                                        depth=8 (as documintaion) so that higher priority 
-                                                                                                donates it's priority for the running one which hold the mutex
-
-visualization:
-
-(T1 ,p=100)-------waits for------>(T2,p=100)-------waits for ------>(t3,p=5)(running thread) 2 locks  ,100 
-                                                                    D.P=[60]
-                                                                 *
-                                              (100>60)          /
-                                                            waits for t3              (so what happen that D.p is  updated and take the higher P so t3 finish and then     
-                                                            /                           t2,t1,t4. assuming that the highest proirities are 60,100)                         
-                                                    (t4,p=60)
-
-implementation approach: donate the highest priority of the waiting list on a lock to the lock itself (lock priority) and whatever thread acquire the lock it's D.P will be assigned 
-                        to that prioty, once it release the lock we call a fn to updates it's D.P : the fn for the given 
-                        
-                        case 1:thread handling 
-                         it sees what are the locks which are acquired by the thread
-                        and compare thier highest priority and assign the D.P to the highest , if there is no acquired locks the D.P set back to it's original priority
-                        
-                        for case 2 Lock handling : 
-                        if it is (2.1) accquire check  if the acquring thread priority is higher than highest priority var of the lock , if true update the highest 
-                        lock var ,if false update the D.P with the highest lock , 
-                        
-                        (2.2)if relese lock then check for the current highest in the waiting list and update the highest in the lock if(waiting empty) the highest set to zero 
-
-                        this is called when a thread acquire a lock or release it ,,the fn takes three paramater 1.thread pointer 2. the lock 3. the state (acquire or release)
-
-                        TODO: implement the fn ,and add a list with acquired locks to  thread struct ,modify lock struct and add a new var highest priority 
-
-need to know :where to call add_acquire locks and remove_acquired locks, what is the initial val of donated priority, 2. check list_insert_order sorting criteria : sort by priority now is > shouldn't be (<)? as 
-
-typedef bool list_less_func (const struct list_elem *a,
-                             const struct list_elem *b,
-                             void *aux);
-                             returns true if a <b
-*/
