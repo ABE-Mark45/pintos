@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/fixed-point.h"
 #define MAX(a,b) ((a > b) ? (a): (b))
 #define MIN(a,b) ((a < b) ? (a): (b))
 
@@ -99,7 +100,7 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
     //start our code 
     int nice_value;
-    int recent_cpu;
+    struct real recent_cpu;
     int64_t wake_up_after_tick;
     int donated_priority;
     struct list acquired_locks;           /* List  for all acquired locks.(initiated in init_thread) */

@@ -12,7 +12,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 
-#include "threads/fixed-point.h"
+// #include "threads/fixed-point.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -52,7 +52,7 @@ struct kernel_thread_frame
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
-static int load_avg;
+static struct real load_avg;
 
 
 /* Scheduling. */
@@ -145,8 +145,8 @@ void threads_update_statistics(bool one_second)
       cur = list_entry(cur_iter, struct thread, allelem);
       if(cur != idle_thread)
       {
-        int recent_cpu = cur->recent_cpu;
-        int load_avg_double = MUL_F_I(load_avg,2);
+        struct real recent_cpu = cur->recent_cpu;
+        struct real load_avg_double = MUL_F_I(load_avg,2);
         cur->recent_cpu = ADD_F_I(MUL_F_F(DIV_F_F(load_avg_double, ADD_F_I(load_avg_double, 1)), recent_cpu), cur->nice_value);
       }
     }
@@ -600,7 +600,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   
   t->nice_value = (t == initial_thread? 0: thread_current()->nice_value);
-  t->recent_cpu = (t == initial_thread? 0: thread_current()->recent_cpu);
+  t->recent_cpu = (t == initial_thread? (struct real) {0}: thread_current()->recent_cpu);
   //start our code
   list_init(&t->acquired_locks);
   t->waiting_on_lock = NULL;

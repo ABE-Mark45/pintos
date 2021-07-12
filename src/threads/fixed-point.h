@@ -6,31 +6,67 @@
 #define Q 14
 #define F (1<<Q)
 
-#define I_TO_F(N) (N*F)               // Integer to fixed point
-#define F_TO_I_DOWN(X) (X/F)          // Fixed point to integer
-#define ADD_F_F(X,Y) (X+Y)            // Add fixed to fixed
-#define SUB_F_F(X,Y) (X-Y)            // Sub fixed fixed
-#define ADD_F_I(X,N) (X+N*F)          // Add fixed integer
-#define SUB_F_I(X,N) (X-N*F)          // Sub fixed integer
-#define MUL_F_I(X,N) (X*N)            // Multiply fixed integer
-#define DIV_F_I(X,N) (X/N)            // Divide fixed integer
-
-static inline int MUL_F_F(int x, int y)
+struct real
 {
-    return ((int64_t)x) * y / F;
+    int val;
+};
+
+static inline struct real I_TO_F(int N) // Integer to fixed point
+{
+    return (struct real) {N * F};
 }
 
-static inline int DIV_F_F(int x, int y)
+static inline int F_TO_I_DOWN(struct real X) // Fixed point to integer
 {
-    return ((int64_t)x) * F / y;
+    return X.val / F;
+};
+
+static inline struct real ADD_F_F(struct real X, struct real Y) // Add fixed to fixed
+{
+    return (struct real) {X.val + Y.val};
 }
 
-static inline int F_TO_I_ROUND(int x)
+static inline struct real SUB_F_F(struct real X, struct real Y) // Sub fixed to fixed
 {
-    if(x >= 0)
-        return (x + F/2) / F;
+    return (struct real) {X.val - Y.val};
+}
+
+static inline struct real ADD_F_I(struct real X, int N) // Add fixed integer
+{
+    return (struct real) {X.val + N*F};
+}
+
+static inline struct real SUB_F_I(struct real X, int N) // Sub fixed integer
+{
+    return (struct real) {X.val - N*F};
+}
+
+static inline struct real MUL_F_I(struct real X, int N) // Multiply fixed integer
+{
+    return (struct real) {X.val * N};
+}
+
+static inline struct real DIV_F_I(struct real X, int N) // Divide fixed integer
+{
+    return (struct real) {X.val / N};
+}
+
+static inline struct real MUL_F_F(struct real X, struct real Y)
+{
+    return (struct real) {((int64_t)X.val) * Y.val / F};
+}
+
+static inline struct real DIV_F_F(struct real X, struct real Y)
+{
+    return (struct real) {((int64_t)X.val) * F / Y.val};
+}
+
+static inline int F_TO_I_ROUND(struct real X)
+{
+    if(X.val >= 0)
+        return (X.val + F/2) / F;
     else
-        return (x - F/2) / F;
+        return (X.val - F/2) / F;
 }
 
 #endif
