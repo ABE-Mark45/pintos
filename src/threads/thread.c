@@ -165,6 +165,7 @@ void bsd_recalc_priority(void)
     int new_priority = PRI_MAX - F_TO_I_DOWN(DIV_F_I(cur->recent_cpu, 4)) - (2 * cur->nice_value);
     cur->priority = MIN(PRI_MAX, MAX(PRI_MIN, new_priority));
   }
+  list_sort(&ready_list, threads_priority_comp, NULL);
 }
 
 void thread_tick(void)
