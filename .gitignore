@@ -1,1 +1,5 @@
 .vscode/
+*.o
+our_command.sh
+debug.sh
+*.a
