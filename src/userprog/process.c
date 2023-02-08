@@ -11,6 +11,7 @@
 #include "threads/flags.h"
 #include "threads/init.h"
 #include "threads/interrupt.h"
+#include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
@@ -82,7 +83,9 @@ static void start_process(void* file_name_) {
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int process_wait(tid_t child_tid UNUSED) {
-  return -1;
+  while (true) {
+    thread_yield();
+  }
 }
 
 /* Free the current process's resources. */
@@ -182,7 +185,7 @@ struct Elf32_Phdr {
 #define PF_W 2 /* Writable. */
 #define PF_R 4 /* Readable. */
 
-static bool setup_stack(void** esp);
+static bool setup_stack(void** esp, const char* cmd_line, uint32_t cmd_len);
 static bool validate_segment(const struct Elf32_Phdr*, struct file*);
 static bool load_segment(struct file* file, off_t ofs, uint8_t* upage,
                          uint32_t read_bytes, uint32_t zero_bytes,
@@ -192,13 +195,19 @@ static bool load_segment(struct file* file, off_t ofs, uint8_t* upage,
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
-bool load(const char* file_name, void (**eip)(void), void** esp) {
+bool load(const char* cmd_line, void (**eip)(void), void** esp) {
   struct thread* t = thread_current();
   struct Elf32_Ehdr ehdr;
   struct file* file = NULL;
   off_t file_ofs;
   bool success = false;
   int i;
+
+  uint32_t cmd_len = strlen(cmd_line) + 1;  // NULL Terminator
+  char* cmd_cpy = (char*)malloc(sizeof(char) * cmd_len);
+  memcpy(cmd_cpy, cmd_line, cmd_len);
+  char* save_ptr;
+  char* executable_name = strtok_r(cmd_cpy, " ", &save_ptr);
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create();
@@ -207,9 +216,9 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   process_activate();
 
   /* Open executable file. */
-  file = filesys_open(file_name);
+  file = filesys_open(executable_name);
   if (file == NULL) {
-    printf("load: %s: open failed\n", file_name);
+    printf("load: %s: open failed\n", executable_name);
     goto done;
   }
 
@@ -218,7 +227,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
       memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 ||
       ehdr.e_machine != 3 || ehdr.e_version != 1 ||
       ehdr.e_phentsize != sizeof(struct Elf32_Phdr) || ehdr.e_phnum > 1024) {
-    printf("load: %s: error loading executable\n", file_name);
+    printf("load: %s: error loading executable\n", executable_name);
     goto done;
   }
 
@@ -275,7 +284,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   }
 
   /* Set up stack. */
-  if (!setup_stack(esp))
+  if (!setup_stack(esp, cmd_line, cmd_len))
     goto done;
 
   /* Start address. */
@@ -284,6 +293,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   success = true;
 
 done:
+  free(cmd_cpy);
   /* We arrive here whether the load is successful or not. */
   file_close(file);
   return success;
@@ -393,16 +403,69 @@ static bool load_segment(struct file* file, off_t ofs, uint8_t* upage,
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
-static bool setup_stack(void** esp) {
+static bool setup_stack(void** esp, const char* cmd_line, uint32_t cmd_len) {
   uint8_t* kpage;
   bool success = false;
 
   kpage = palloc_get_page(PAL_USER | PAL_ZERO);
   if (kpage != NULL) {
     success = install_page(((uint8_t*)PHYS_BASE) - PGSIZE, kpage, true);
-    if (success)
+    if (success) {
       *esp = PHYS_BASE;
-    else
+      *esp -= cmd_len;
+
+      memcpy(*esp, cmd_line, cmd_len);
+
+      char* cmd_line_on_stack = *esp;
+
+      uint32_t padding_bytes = 4 - cmd_len % 4;
+      padding_bytes = padding_bytes == 4 ? 0 : padding_bytes;
+      padding_bytes += 4;
+
+      *esp -= padding_bytes;
+
+      memset(*esp, 0, padding_bytes);
+
+      struct list args_list;
+      list_init(&args_list);
+
+      struct arg_elem {
+        struct list_elem elem;
+        char* arg_ptr;
+      };
+
+      uint32_t argc = 0;
+      char* args_save_ptr;
+      for (char* arg_str = strtok_r(cmd_line_on_stack, " ", &args_save_ptr);
+           arg_str != NULL; arg_str = strtok_r(NULL, " ", &args_save_ptr)) {
+        struct arg_elem* arg =
+            (struct arg_elem*)malloc(sizeof(struct arg_elem));
+        arg->arg_ptr = arg_str;
+        list_push_front(&args_list, &arg->elem);
+        argc++;
+      }
+
+      for (struct list_elem* elem = list_begin(&args_list);
+           elem != list_end(&args_list); elem = list_next(elem)) {
+        char* argv_elem = list_entry(elem, struct arg_elem, elem)->arg_ptr;
+        *esp -= 4;
+        memcpy(*esp, &argv_elem, sizeof argv_elem);
+      }
+
+      *esp -= 4;
+      void* argv = *esp;
+      memcpy(*esp, &argv, sizeof argv);
+
+      *esp -= 4;
+      memcpy(*esp, &argc, sizeof argc);
+
+      *esp -= 4;
+      memset(*esp, 0, 4);
+
+      while (list_empty(&args_list)) {
+        free(list_entry(list_pop_front(&args_list), struct arg_elem, elem));
+      }
+    } else
       palloc_free_page(kpage);
   }
   return success;
