@@ -112,6 +112,7 @@ int process_wait(tid_t child_tid) {
     lock_acquire(&current->children_processs_semaphores_list_lock);
     list_remove(sem_elem);
     lock_release(&current->children_processs_semaphores_list_lock);
+    free(sem_elem);
     return 0;
 }
 
