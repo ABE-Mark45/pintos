@@ -287,6 +287,11 @@ void thread_unblock(struct thread* t) {
   list_insert_ordered(&ready_list, &t->elem, threads_priority_comp, NULL);
   t->status = THREAD_READY;
   //start our code
+
+  // if (thread_current() != idle_thread &&
+  //     thread_current()->priority < t->priority) {
+  //   thread_yield();
+  // }
   intr_set_level(old_level);
 }
 
@@ -407,7 +412,6 @@ void thread_set_priority(int new_priority) {
   if (!list_empty(&ready_list) &&
       is_higher_priority_first(
           list_entry(list_front(&ready_list), struct thread, elem), cur)) {
-    // printf("Current priority: %d, new thread_priority: %d\n", cur->donated_priority, list_entry(list_front(&ready_list), struct thread, elem)->donated_priority);
     thread_yield();
   }
   intr_set_level(old_level);
@@ -678,7 +682,7 @@ bool threads_priority_comp(const struct list_elem* a_elem,
 bool is_higher_priority_first(struct thread* a, struct thread* b) {
   int priority_a = thread_get_other_priority(a);
   int priority_b = thread_get_other_priority(b);
-  return (priority_a == priority_b) ? false : priority_a > priority_b;
+  return (a == b || priority_a == priority_b) ? false : priority_a > priority_b;
 }
 
 //return true if lock a highest priority is less than lock b highest priority as defined in list less fn
@@ -707,6 +711,7 @@ void threads_wakeup_blocked(int64_t ticks) {
 
 // ana hrai7ly habetin
 void thread_sleep(int64_t after) {
+  ASSERT(intr_get_level() == INTR_OFF);
   struct thread* t = thread_current();
   t->wake_up_after_tick = after;
 
@@ -717,12 +722,16 @@ void thread_sleep(int64_t after) {
 
 // Do not call in interrupts
 void yield_if_not_max_priority(void) {
+  if (intr_context()) {
+    return;
+  }
   enum intr_level old_level = intr_disable();
   if (!list_empty(&ready_list) &&
       is_higher_priority_first(
           list_entry(list_front(&ready_list), struct thread, elem),
-          thread_current()))
+          thread_current())) {
     thread_yield();
+  }
   intr_set_level(old_level);
 }
 
