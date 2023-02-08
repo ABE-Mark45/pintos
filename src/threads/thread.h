@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 #include "threads/fixed-point.h"
 #define MAX(a, b) ((a > b) ? (a) : (b))
 #define MIN(a, b) ((a < b) ? (a) : (b))
@@ -108,6 +109,10 @@ struct thread {
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
   struct list* sem_list;
+
+  struct lock children_processs_semaphores_list_lock;
+  struct list children_processs_semaphores_list;
+  struct thread* parent;
 
 #ifdef USERPROG
   /* Owned by userprog/process.c. */

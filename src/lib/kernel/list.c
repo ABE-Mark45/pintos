@@ -336,6 +336,21 @@ list_reverse (struct list *list)
     }
 }
 
+struct list_elem* list_search(struct list *list, list_predicate_func *func, void *aux) {
+  if (list == NULL) {
+    return NULL;
+  }
+
+  for (struct list_elem* elem = list_begin(list);
+        elem != list_end(list); elem = list_next(elem)) {
+    if (func(elem, aux)) {
+      return elem;
+    }
+  }
+
+  return NULL;
+}
+
 /* Returns true only if the list elements A through B (exclusive)
    are in order according to LESS given auxiliary data AUX. */
 static bool

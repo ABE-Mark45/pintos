@@ -15,7 +15,7 @@ struct semaphore_elem {
   struct list_elem elem;      /* List element. */
   struct semaphore semaphore; /* This semaphore. */
   struct thread*
-      waiting_thread;  // redundant storage to simplify keeping waiters sorted
+      thread;  // redundant storage to simplify keeping waiters sorted
 };
 
 void sema_init(struct semaphore*, unsigned value);

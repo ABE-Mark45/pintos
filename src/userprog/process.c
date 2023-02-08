@@ -17,10 +17,23 @@
 #include "threads/vaddr.h"
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
+#include <list.h>
+#include "threads/synch.h"
 #include "userprog/tss.h"
 
 static thread_func start_process NO_RETURN;
 static bool load(const char* cmdline, void (**eip)(void), void** esp);
+
+static bool semaphore_elem_with_tid(const struct list_elem* elem, void *aux) {
+  tid_t tid = *((tid_t *) aux);
+  struct semaphore_elem* sem_elem = list_entry(elem, struct semaphore_elem, elem);
+
+  if (sem_elem->thread->tid == tid) {
+    return true;
+  }
+  return false;
+}
+
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -82,17 +95,42 @@ static void start_process(void* file_name_) {
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait(tid_t child_tid UNUSED) {
-  while (true) {
-    thread_yield();
-  }
+int process_wait(tid_t child_tid) {
+    struct thread* current = thread_current();
+
+    lock_acquire(&current->children_processs_semaphores_list_lock);
+    struct list_elem* sem_elem = list_search(&current->children_processs_semaphores_list, &semaphore_elem_with_tid, (void *)&child_tid);
+    lock_release(&current->children_processs_semaphores_list_lock);
+    
+    if (sem_elem == NULL) {
+      return -1;
+    } 
+
+    struct semaphore* sem = &list_entry(sem_elem, struct semaphore_elem, elem)->semaphore;
+    sema_down(sem);
+
+    lock_acquire(&current->children_processs_semaphores_list_lock);
+    list_remove(sem_elem);
+    lock_release(&current->children_processs_semaphores_list_lock);
+    return 0;
 }
 
 /* Free the current process's resources. */
-void process_exit(void) {
+void process_exit(bool is_inital_thread) {
   struct thread* cur = thread_current();
-  uint32_t* pd;
+  tid_t tid = cur->tid;
+  if (!is_inital_thread) {
+    struct thread* parent = cur->parent;
 
+    struct list_elem* sem_elem = list_search(&parent->children_processs_semaphores_list, &semaphore_elem_with_tid, (void *)&tid);
+    if (sem_elem != NULL) {
+      struct semaphore* sem = &list_entry(sem_elem, struct semaphore_elem, elem)->semaphore;
+      sema_up(sem);
+    }
+  }
+
+  uint32_t* pd;
+  
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;

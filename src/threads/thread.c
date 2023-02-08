@@ -10,6 +10,7 @@
 #include "threads/palloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
+#include "threads/malloc.h"
 #include "threads/vaddr.h"
 
 // #include "threads/fixed-point.h"
@@ -328,7 +329,8 @@ void thread_exit(void) {
   ASSERT(!intr_context());
 
 #ifdef USERPROG
-  process_exit();
+  process_exit(thread_current() == initial_thread);
+  // process_exit(false);
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -532,6 +534,7 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   ASSERT(t != NULL);
   ASSERT(PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT(name != NULL);
+  struct thread* current = (t == initial_thread? NULL : thread_current());
 
   memset(t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
@@ -544,15 +547,31 @@ static void init_thread(struct thread* t, const char* name, int priority) {
 
   t->magic = THREAD_MAGIC;
 
-  t->nice_value = (t == initial_thread ? 0 : thread_current()->nice_value);
+  t->nice_value = (t == initial_thread ? 0 : current->nice_value);
   t->recent_cpu =
-      (t == initial_thread ? (struct real){0} : thread_current()->recent_cpu);
+      (t == initial_thread ? (struct real){0} : current->recent_cpu);
   //start our code
   list_init(&t->acquired_locks);
   t->waiting_on_lock = NULL;
   //end our code
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
+  
+  t->parent = current;
+  list_init(&t->children_processs_semaphores_list);
+  lock_init(&t->children_processs_semaphores_list_lock);
+  if (current != NULL) {
+
+  // Add this thread to the list of parent child process
+  struct semaphore_elem* sem_elem =
+      (struct semaphore_elem*)malloc(sizeof(struct semaphore_elem));
+  sema_init(&sem_elem->semaphore, 0);
+  sem_elem->thread = t;
+    // lock_acquire(&current->children_processs_semaphores_list_lock);
+    list_push_front(&current->children_processs_semaphores_list,
+                    &sem_elem->elem);
+    // lock_release(&current->children_processs_semaphores_list_lock);
+  }
   intr_set_level(old_level);
 }
 
@@ -673,6 +692,9 @@ bool threads_wakeup_comp(const struct list_elem* a_elem,
 //  return true if a _priority > b_priority
 bool threads_priority_comp(const struct list_elem* a_elem,
                            const struct list_elem* b_elem, void* aux UNUSED) {
+  if (aux != NULL && (a_elem == NULL || b_elem == NULL)) {
+    printf("HEEEEEEEEEEEREEEEEEEEE: %s\n\n\n", (char*)aux);
+  }
   ASSERT(a_elem != NULL && b_elem != NULL);
   struct thread* a = list_entry(a_elem, struct thread, elem);
   struct thread* b = list_entry(b_elem, struct thread, elem);

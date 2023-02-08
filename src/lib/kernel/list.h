@@ -157,7 +157,11 @@ size_t list_size (struct list *);
 bool list_empty (struct list *);
 
 /* Miscellaneous. */
+typedef bool list_predicate_func (const struct list_elem *elem, void *aux);
+
+
 void list_reverse (struct list *);
+struct list_elem* list_search(struct list *, list_predicate_func *, void *aux);
 
 /* Compares the value of two list elements A and B, given
    auxiliary data AUX.  Returns true if A is less than B, or
