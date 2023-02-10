@@ -26,10 +26,8 @@ static bool load(const char* cmdline, void (**eip)(void), void** esp);
 
 static bool semaphore_elem_with_tid(const struct list_elem* elem, void* aux) {
   tid_t tid = *((tid_t*)aux);
-  struct semaphore_elem* sem_elem =
-      list_entry(elem, struct semaphore_elem, elem);
-
-  if (sem_elem->thread->tid == tid) {
+  struct child_elem* child = list_entry(elem, struct child_elem, elem);
+  if (child->tid == tid) {
     return true;
   }
   return false;
@@ -50,10 +48,18 @@ tid_t process_execute(const char* file_name) {
     return TID_ERROR;
   strlcpy(fn_copy, file_name, PGSIZE);
 
+  uint32_t cmd_len = strlen(file_name) + 1;
+  char* cmd_cpy = (char*)malloc(sizeof(char) * cmd_len);
+  memcpy(cmd_cpy, file_name, cmd_len);
+  char* save_ptr;
+  char* exec_name = strtok_r(cmd_cpy, " ", &save_ptr);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
+  tid = thread_create(exec_name, PRI_DEFAULT, start_process, fn_copy);
+  if (tid == TID_ERROR) {
+    free(cmd_cpy);
     palloc_free_page(fn_copy);
+  }
   return tid;
 }
 
@@ -74,7 +80,7 @@ static void start_process(void* file_name_) {
   /* If load failed, quit. */
   palloc_free_page(file_name);
   if (!success)
-    thread_exit();
+    thread_exit(-1);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -99,28 +105,27 @@ int process_wait(tid_t child_tid) {
   struct thread* current = thread_current();
 
   lock_acquire(&current->children_processs_semaphores_list_lock);
-  struct list_elem* sem_elem =
+  struct list_elem* elem =
       list_search(&current->children_processs_semaphores_list,
                   &semaphore_elem_with_tid, (void*)&child_tid);
   lock_release(&current->children_processs_semaphores_list_lock);
 
-  if (sem_elem == NULL) {
+  if (elem == NULL) {
     return -1;
   }
 
-  struct semaphore* sem =
-      &list_entry(sem_elem, struct semaphore_elem, elem)->semaphore;
-  sema_down(sem);
+  struct child_elem* child_elem = list_entry(elem, struct child_elem, elem);
+  sema_down(&child_elem->semaphore);
 
   lock_acquire(&current->children_processs_semaphores_list_lock);
-  list_remove(sem_elem);
+  list_remove(elem);
   lock_release(&current->children_processs_semaphores_list_lock);
-  free(sem_elem);
+  free(child_elem);
   return 0;
 }
 
 /* Free the current process's resources. */
-void process_exit(bool is_inital_thread) {
+void process_exit(bool is_inital_thread, int exit_status) {
   struct thread* cur = thread_current();
   tid_t tid = cur->tid;
   if (!is_inital_thread) {
@@ -128,13 +133,13 @@ void process_exit(bool is_inital_thread) {
     if (parent == NULL) {
       return;
     }
-    struct list_elem* sem_elem =
+    struct list_elem* elem =
         list_search(&parent->children_processs_semaphores_list,
                     &semaphore_elem_with_tid, (void*)&tid);
-    if (sem_elem != NULL) {
-      struct semaphore* sem =
-          &list_entry(sem_elem, struct semaphore_elem, elem)->semaphore;
-      sema_up(sem);
+    if (elem != NULL) {
+      struct child_elem* child = list_entry(elem, struct child_elem, elem);
+      child->exit_status = exit_status;
+      sema_up(&child->semaphore);
     }
   }
 
@@ -155,6 +160,7 @@ void process_exit(bool is_inital_thread) {
     pagedir_activate(NULL);
     pagedir_destroy(pd);
   }
+  printf("%s: exit(%d)\n", thread_current()->name, exit_status);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -500,7 +506,7 @@ static bool setup_stack(void** esp, const char* cmd_line, uint32_t cmd_len) {
       }
 
       *esp -= 4;
-      void* argv = *esp;
+      void* argv = *esp + 4;
       memcpy(*esp, &argv, sizeof argv);
 
       *esp -= 4;

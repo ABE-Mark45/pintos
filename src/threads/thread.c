@@ -7,10 +7,10 @@
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
+#include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
-#include "threads/malloc.h"
 #include "threads/vaddr.h"
 
 // #include "threads/fixed-point.h"
@@ -71,7 +71,8 @@ static void kernel_thread(thread_func*, void* aux);
 static void idle(void* aux UNUSED);
 static struct thread* running_thread(void);
 static struct thread* next_thread_to_run(void);
-static void init_thread(struct thread*, const char* name, int priority);
+static void init_thread(struct thread*, const char* name, int priority,
+                        tid_t tid);
 static bool is_thread(struct thread*) UNUSED;
 static void* alloc_frame(struct thread*, size_t size);
 static void schedule(void);
@@ -101,7 +102,7 @@ void thread_init(void) {
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread();
-  init_thread(initial_thread, "main", PRI_DEFAULT);
+  init_thread(initial_thread, "main", PRI_DEFAULT, 1);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid();
 }
@@ -224,8 +225,8 @@ tid_t thread_create(const char* name, int priority, thread_func* function,
     return TID_ERROR;
 
   /* Initialize thread. */
-  init_thread(t, name, priority);
-  tid = t->tid = allocate_tid();
+  tid = allocate_tid();
+  init_thread(t, name, priority, tid);
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame(t, sizeof *kf);
@@ -325,11 +326,11 @@ tid_t thread_tid(void) {
 
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
-void thread_exit(void) {
+void thread_exit(int exit_status) {
   ASSERT(!intr_context());
 
 #ifdef USERPROG
-  process_exit(thread_current() == initial_thread);
+  process_exit(thread_current() == initial_thread, exit_status);
   // process_exit(false);
 #endif
 
@@ -504,9 +505,9 @@ static void idle(void* idle_started_ UNUSED) {
 static void kernel_thread(thread_func* function, void* aux) {
   ASSERT(function != NULL);
 
-  intr_enable(); /* The scheduler runs with interrupts off. */
-  function(aux); /* Execute the thread function. */
-  thread_exit(); /* If function() returns, kill the thread. */
+  intr_enable();  /* The scheduler runs with interrupts off. */
+  function(aux);  /* Execute the thread function. */
+  thread_exit(0); /* If function() returns, kill the thread. */
 }
 
 /* Returns the running thread. */
@@ -528,13 +529,14 @@ static bool is_thread(struct thread* t) {
 
 /* Does basic initialization of T as a blocked thread named
    NAME. */
-static void init_thread(struct thread* t, const char* name, int priority) {
+static void init_thread(struct thread* t, const char* name, int priority,
+                        tid_t tid) {
   enum intr_level old_level;
 
   ASSERT(t != NULL);
   ASSERT(PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT(name != NULL);
-  struct thread* current = (t == initial_thread? NULL : thread_current());
+  struct thread* current = (t == initial_thread ? NULL : thread_current());
 
   memset(t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
@@ -556,21 +558,18 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   //end our code
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
-  
+
   t->parent = current;
   list_init(&t->children_processs_semaphores_list);
   lock_init(&t->children_processs_semaphores_list_lock);
+  list_init(&t->files);
   if (current != NULL) {
-
-  // Add this thread to the list of parent child process
-  struct semaphore_elem* sem_elem =
-      (struct semaphore_elem*)malloc(sizeof(struct semaphore_elem));
-  sema_init(&sem_elem->semaphore, 0);
-  sem_elem->thread = t;
-    // lock_acquire(&current->children_processs_semaphores_list_lock);
-    list_push_front(&current->children_processs_semaphores_list,
-                    &sem_elem->elem);
-    // lock_release(&current->children_processs_semaphores_list_lock);
+    // Add this thread to the list of parent child process
+    struct child_elem* child =
+        (struct child_elem*)malloc(sizeof(struct child_elem));
+    sema_init(&child->semaphore, 0);
+    child->tid = t->tid = tid;
+    list_push_front(&current->children_processs_semaphores_list, &child->elem);
   }
   intr_set_level(old_level);
 }
@@ -692,9 +691,6 @@ bool threads_wakeup_comp(const struct list_elem* a_elem,
 //  return true if a _priority > b_priority
 bool threads_priority_comp(const struct list_elem* a_elem,
                            const struct list_elem* b_elem, void* aux UNUSED) {
-  if (aux != NULL && (a_elem == NULL || b_elem == NULL)) {
-    printf("HEEEEEEEEEEEREEEEEEEEE: %s\n\n\n", (char*)aux);
-  }
   ASSERT(a_elem != NULL && b_elem != NULL);
   struct thread* a = list_entry(a_elem, struct thread, elem);
   struct thread* b = list_entry(b_elem, struct thread, elem);

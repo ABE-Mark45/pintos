@@ -4,8 +4,9 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "threads/synch.h"
+#include "filesys/file.h"
 #include "threads/fixed-point.h"
+#include "threads/synch.h"
 #define MAX(a, b) ((a > b) ? (a) : (b))
 #define MIN(a, b) ((a < b) ? (a) : (b))
 
@@ -28,6 +29,19 @@ typedef int tid_t;
 #define PRI_MAX 63     /* Highest priority. */
 #define BSD_SCHEDULER true
 #define PRIORITY_SCHEDULER false
+
+struct fd_elem {
+  struct list_elem elem;
+  int fd;
+  struct file* file;
+};
+
+struct child_elem {
+  struct list_elem elem;
+  struct semaphore semaphore;
+  tid_t tid;
+  int exit_status;
+};
 
 /* A kernel thread or user process.
 
@@ -113,6 +127,7 @@ struct thread {
   struct lock children_processs_semaphores_list_lock;
   struct list children_processs_semaphores_list;
   struct thread* parent;
+  struct list files;
 
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
@@ -144,7 +159,7 @@ struct thread* thread_current(void);
 tid_t thread_tid(void);
 const char* thread_name(void);
 
-void thread_exit(void) NO_RETURN;
+void thread_exit(int status) NO_RETURN;
 void thread_yield(void);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
