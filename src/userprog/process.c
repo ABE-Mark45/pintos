@@ -120,8 +120,9 @@ int process_wait(tid_t child_tid) {
   lock_acquire(&current->children_processs_semaphores_list_lock);
   list_remove(elem);
   lock_release(&current->children_processs_semaphores_list_lock);
+  int exit_status = child_elem->exit_status;
   free(child_elem);
-  return 0;
+  return exit_status;
 }
 
 /* Free the current process's resources. */

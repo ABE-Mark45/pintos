@@ -563,6 +563,7 @@ static void init_thread(struct thread* t, const char* name, int priority,
   list_init(&t->children_processs_semaphores_list);
   lock_init(&t->children_processs_semaphores_list_lock);
   list_init(&t->files);
+  t->fd_counter = 2;
   if (current != NULL) {
     // Add this thread to the list of parent child process
     struct child_elem* child =

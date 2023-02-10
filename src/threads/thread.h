@@ -127,6 +127,8 @@ struct thread {
   struct lock children_processs_semaphores_list_lock;
   struct list children_processs_semaphores_list;
   struct thread* parent;
+
+  uint32_t fd_counter;
   struct list files;
 
 #ifdef USERPROG
