@@ -134,6 +134,8 @@ struct thread {
   struct semaphore load_state_sem;
   struct semaphore start_exec_sem;
 
+  struct file* executable_file;
+
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
   uint32_t* pagedir; /* Page directory. */

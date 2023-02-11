@@ -13,12 +13,9 @@
 #include "threads/vaddr.h"
 #include "userprog/process.h"
 
-static struct lock filesys_ops_lock;
-
 static void syscall_handler(struct intr_frame*);
 
 void syscall_init(void) {
-  lock_init(&filesys_ops_lock);
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -88,24 +85,23 @@ static void syscall_close(int fd_num) {
   }
   struct fd_elem* fd = list_entry(elem, struct fd_elem, elem);
 
-  lock_acquire(&filesys_ops_lock);
+  lock_filesys();
   file_close(fd->file);
-  lock_release(&filesys_ops_lock);
+  unlock_filesys();
 
   list_remove(elem);
   free(fd);
 }
 
 static void syscall_open(struct intr_frame* f, char* buffer) {
-  printf("\t\t\t\t\t\t---------> HERE\n");
   if (buffer == NULL || !test_string(buffer)) {
     thread_exit(-1);
   }
   struct thread* cur = thread_current();
   int cur_fd = cur->fd_counter++;
-  lock_acquire(&filesys_ops_lock);
+  lock_filesys();
   struct file* opened_file = filesys_open(buffer);
-  lock_release(&filesys_ops_lock);
+  unlock_filesys();
 
   if (opened_file == NULL) {
     f->eax = -1;
@@ -141,9 +137,9 @@ static void syscall_write(struct intr_frame* f, int fd_num, char* buffer,
     }
     struct fd_elem* fd = list_entry(elem, struct fd_elem, elem);
     struct file* opened_file = fd->file;
-    lock_acquire(&filesys_ops_lock);
+    lock_filesys();
     f->eax = file_write(opened_file, buffer, size);
-    lock_release(&filesys_ops_lock);
+    unlock_filesys();
   }
 }
 
@@ -171,9 +167,9 @@ static void syscall_read(struct intr_frame* f, int fd_num, char* buffer,
     }
     struct fd_elem* fd = list_entry(elem, struct fd_elem, elem);
     struct file* opened_file = fd->file;
-    lock_acquire(&filesys_ops_lock);
+    lock_filesys();
     f->eax = file_read(opened_file, buffer, size);
-    lock_release(&filesys_ops_lock);
+    unlock_filesys();
   }
 }
 
@@ -186,9 +182,9 @@ static void syscall_seek(int fd_num, unsigned position) {
   }
   struct fd_elem* fd = list_entry(elem, struct fd_elem, elem);
   struct file* opened_file = fd->file;
-  lock_acquire(&filesys_ops_lock);
+  lock_filesys();
   file_seek(opened_file, position);
-  lock_release(&filesys_ops_lock);
+  unlock_filesys();
 }
 
 static void syscall_tell(struct intr_frame* f, int fd_num) {
@@ -201,9 +197,9 @@ static void syscall_tell(struct intr_frame* f, int fd_num) {
   }
   struct fd_elem* fd = list_entry(elem, struct fd_elem, elem);
   struct file* opened_file = fd->file;
-  lock_acquire(&filesys_ops_lock);
+  lock_filesys();
   f->eax = file_tell(opened_file);
-  lock_release(&filesys_ops_lock);
+  unlock_filesys();
 }
 
 static void syscall_filesize(struct intr_frame* f, int fd_num) {
@@ -216,9 +212,9 @@ static void syscall_filesize(struct intr_frame* f, int fd_num) {
   }
   struct fd_elem* fd = list_entry(elem, struct fd_elem, elem);
   struct file* opened_file = fd->file;
-  lock_acquire(&filesys_ops_lock);
+  lock_filesys();
   f->eax = file_length(opened_file);
-  lock_release(&filesys_ops_lock);
+  unlock_filesys();
 }
 
 static void syscall_create(struct intr_frame* f, const char* file_name,
@@ -226,9 +222,9 @@ static void syscall_create(struct intr_frame* f, const char* file_name,
   if (file_name == NULL || !test_string(file_name) || inital_size < 0) {
     thread_exit(-1);
   }
-  lock_acquire(&filesys_ops_lock);
+  lock_filesys();
   bool status = filesys_create(file_name, inital_size);
-  lock_release(&filesys_ops_lock);
+  unlock_filesys();
   f->eax = status;
 }
 
@@ -236,9 +232,9 @@ static void syscall_remove(struct intr_frame* f, const char* file_name) {
   if (file_name == NULL || !test_string(file_name)) {
     thread_exit(-1);
   }
-  lock_acquire(&filesys_ops_lock);
+  lock_filesys();
   bool status = filesys_remove(file_name);
-  lock_release(&filesys_ops_lock);
+  unlock_filesys();
   f->eax = status;
 }
 

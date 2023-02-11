@@ -46,15 +46,14 @@ tid_t process_execute(const char* file_name) {
   strlcpy(fn_copy, file_name, PGSIZE);
 
   uint32_t cmd_len = strlen(file_name) + 1;
-  char* cmd_cpy = (char*)malloc(sizeof(char) * cmd_len);
-  memcpy(cmd_cpy, file_name, cmd_len);
+  char cmd_cpy[16];
+  memcpy(cmd_cpy, file_name, sizeof(cmd_cpy));
   char* save_ptr;
   char* exec_name = strtok_r(cmd_cpy, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(exec_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR) {
-    free(cmd_cpy);
     palloc_free_page(fn_copy);
     return tid;
   } else {
@@ -142,12 +141,32 @@ int process_wait(tid_t child_tid) {
 
 /* Free the current process's resources. */
 void process_exit(bool is_inital_thread, int exit_status) {
+  struct thread* cur = thread_current();
+
   if (exit_status != -2) {
-    printf("%s: exit(%d)\n", thread_current()->name, exit_status);
+    printf("%s: exit(%d)\n", cur->name, exit_status);
   }
 
   enum intr_level old_level = intr_disable();
-  struct thread* cur = thread_current();
+  file_close(cur->executable_file);
+
+  {
+    while (!list_empty(&cur->files)) {
+      struct fd_elem* fd =
+          list_entry(list_pop_front(&cur->files), struct fd_elem, elem);
+      free(fd);
+    }
+  }
+
+  {
+    while (!list_empty(&cur->children_processs_semaphores_list)) {
+      struct child_elem* fd =
+          list_entry(list_pop_front(&cur->children_processs_semaphores_list),
+                     struct child_elem, elem);
+      free(fd);
+    }
+  }
+
   tid_t tid = cur->tid;
   if (!is_inital_thread) {
     struct thread* parent = get_thread_with_tid(cur->parent_tid);
@@ -276,9 +295,9 @@ bool load(const char* cmd_line, void (**eip)(void), void** esp) {
   bool success = false;
   int i;
 
-  uint32_t cmd_len = strlen(cmd_line) + 1;  // NULL Terminator
-  char* cmd_cpy = (char*)malloc(sizeof(char) * cmd_len);
-  memcpy(cmd_cpy, cmd_line, cmd_len);
+  uint32_t cmd_len = strlen(cmd_line) + 1;
+  char cmd_cpy[16];
+  memcpy(cmd_cpy, cmd_line, sizeof(cmd_cpy));
   char* save_ptr;
   char* executable_name = strtok_r(cmd_cpy, " ", &save_ptr);
 
@@ -288,11 +307,16 @@ bool load(const char* cmd_line, void (**eip)(void), void** esp) {
     goto done;
   process_activate();
   /* Open executable file. */
+  lock_filesys();
   file = filesys_open(executable_name);
+  unlock_filesys();
   if (file == NULL) {
     printf("load: %s: open failed\n", executable_name);
     goto done;
   }
+
+  // disable writing to exec
+  file_deny_write(file);
 
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
@@ -365,12 +389,11 @@ bool load(const char* cmd_line, void (**eip)(void), void** esp) {
   success = true;
 
 done:
-  free(cmd_cpy);
   /* We arrive here whether the load is successful or not. */
-  file_close(file);
-  if (success) {
-    // disable writing to exec
-    file_deny_write(file);
+  if (!success) {
+    file_close(file);
+  } else {
+    thread_current()->executable_file = file;
   }
   return success;
 }
