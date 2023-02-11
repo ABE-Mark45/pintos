@@ -126,10 +126,13 @@ struct thread {
 
   struct lock children_processs_semaphores_list_lock;
   struct list children_processs_semaphores_list;
-  struct thread* parent;
+  tid_t parent_tid;
 
   uint32_t fd_counter;
   struct list files;
+  bool load_state;
+  struct semaphore load_state_sem;
+  struct semaphore start_exec_sem;
 
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
@@ -194,6 +197,7 @@ int thread_get_other_priority(struct thread*);
 bool is_higher_priority_first(struct thread*, struct thread*);
 void yield_if_not_max_priority(void);
 void bsd_recalc_priority(void);
+struct thread* get_thread_with_tid(tid_t);
 
 //end our code
 #endif /* threads/thread.h */

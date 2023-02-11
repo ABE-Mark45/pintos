@@ -21,16 +21,13 @@
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
 
-static thread_func start_process NO_RETURN;
+static thread_func start_process;
 static bool load(const char* cmdline, void (**eip)(void), void** esp);
 
 static bool semaphore_elem_with_tid(const struct list_elem* elem, void* aux) {
-  tid_t tid = *((tid_t*)aux);
+  tid_t tid = ((tid_t)aux);
   struct child_elem* child = list_entry(elem, struct child_elem, elem);
-  if (child->tid == tid) {
-    return true;
-  }
-  return false;
+  return child->tid == tid;
 }
 
 /* Starts a new thread running a user program loaded from
@@ -59,8 +56,16 @@ tid_t process_execute(const char* file_name) {
   if (tid == TID_ERROR) {
     free(cmd_cpy);
     palloc_free_page(fn_copy);
+    return tid;
+  } else {
+    struct thread* t = get_thread_with_tid(tid);
+    // Wait for load state to be calculated
+    sema_down(&t->load_state_sem);
+    bool load_state = t->load_state;
+    sema_up(&t->start_exec_sem);
+
+    return load_state == false ? -1 : tid;
   }
-  return tid;
 }
 
 /* A thread function that loads a user process and starts it
@@ -77,10 +82,17 @@ static void start_process(void* file_name_) {
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load(file_name, &if_.eip, &if_.esp);
 
+  struct thread* cur = thread_current();
+  cur->load_state = success;
+
+  sema_up(&cur->load_state_sem);
+  sema_down(&cur->start_exec_sem);
+
   /* If load failed, quit. */
   palloc_free_page(file_name);
-  if (!success)
-    thread_exit(-1);
+  if (!success) {
+    thread_exit(-2);
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -102,12 +114,15 @@ static void start_process(void* file_name_) {
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int process_wait(tid_t child_tid) {
+  if (child_tid == -1) {
+    return -1;
+  }
   struct thread* current = thread_current();
 
   lock_acquire(&current->children_processs_semaphores_list_lock);
   struct list_elem* elem =
       list_search(&current->children_processs_semaphores_list,
-                  &semaphore_elem_with_tid, (void*)&child_tid);
+                  &semaphore_elem_with_tid, (void*)child_tid);
   lock_release(&current->children_processs_semaphores_list_lock);
 
   if (elem == NULL) {
@@ -127,21 +142,26 @@ int process_wait(tid_t child_tid) {
 
 /* Free the current process's resources. */
 void process_exit(bool is_inital_thread, int exit_status) {
+  if (exit_status != -2) {
+    printf("%s: exit(%d)\n", thread_current()->name, exit_status);
+  }
+
+  enum intr_level old_level = intr_disable();
   struct thread* cur = thread_current();
   tid_t tid = cur->tid;
   if (!is_inital_thread) {
-    struct thread* parent = cur->parent;
-    if (parent == NULL) {
-      return;
+    struct thread* parent = get_thread_with_tid(cur->parent_tid);
+    if (parent != NULL) {
+      struct list_elem* elem =
+          list_search(&parent->children_processs_semaphores_list,
+                      &semaphore_elem_with_tid, (void*)tid);
+      if (elem != NULL) {
+        struct child_elem* child = list_entry(elem, struct child_elem, elem);
+        child->exit_status = exit_status;
+        sema_up(&child->semaphore);
+      }
     }
-    struct list_elem* elem =
-        list_search(&parent->children_processs_semaphores_list,
-                    &semaphore_elem_with_tid, (void*)&tid);
-    if (elem != NULL) {
-      struct child_elem* child = list_entry(elem, struct child_elem, elem);
-      child->exit_status = exit_status;
-      sema_up(&child->semaphore);
-    }
+    intr_set_level(old_level);
   }
 
   uint32_t* pd;
@@ -161,7 +181,6 @@ void process_exit(bool is_inital_thread, int exit_status) {
     pagedir_activate(NULL);
     pagedir_destroy(pd);
   }
-  printf("%s: exit(%d)\n", thread_current()->name, exit_status);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -268,7 +287,6 @@ bool load(const char* cmd_line, void (**eip)(void), void** esp) {
   if (t->pagedir == NULL)
     goto done;
   process_activate();
-
   /* Open executable file. */
   file = filesys_open(executable_name);
   if (file == NULL) {
@@ -350,6 +368,10 @@ done:
   free(cmd_cpy);
   /* We arrive here whether the load is successful or not. */
   file_close(file);
+  if (success) {
+    // disable writing to exec
+    file_deny_write(file);
+  }
   return success;
 }
 

@@ -319,6 +319,24 @@ struct thread* thread_current(void) {
   return t;
 }
 
+static bool thread_tid_equal(const struct list_elem* elem, void* aux) {
+  tid_t tid = ((tid_t)aux);
+  struct thread* t = list_entry(elem, struct thread, allelem);
+  return t->tid == tid;
+}
+
+struct thread* get_thread_with_tid(tid_t tid) {
+  enum intr_level old_level = intr_disable();
+  struct list_elem* elem =
+      list_search(&all_list, &thread_tid_equal, (void*)tid);
+  intr_set_level(old_level);
+  if (elem == NULL) {
+    return NULL;
+  }
+  struct thread* t = list_entry(elem, struct thread, allelem);
+  return t;
+}
+
 /* Returns the running thread's tid. */
 tid_t thread_tid(void) {
   return thread_current()->tid;
@@ -555,11 +573,13 @@ static void init_thread(struct thread* t, const char* name, int priority,
   //start our code
   list_init(&t->acquired_locks);
   t->waiting_on_lock = NULL;
+  sema_init(&t->load_state_sem, 0);
+  sema_init(&t->start_exec_sem, 0);
   //end our code
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
 
-  t->parent = current;
+  t->parent_tid = (t == initial_thread ? -1 : current->tid);
   list_init(&t->children_processs_semaphores_list);
   lock_init(&t->children_processs_semaphores_list_lock);
   list_init(&t->files);
